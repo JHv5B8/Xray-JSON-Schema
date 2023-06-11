@@ -1,0 +1,2345 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://github.com/JHv5B8/Test/raw/main/xray-schema.json",
+    "title": "Xray-Core 配置文件",
+    "type": "object",
+    "properties": {
+        "log": {
+            "$ref": "#/$defs/LogObject"
+        },
+        "api": {
+            "$ref": "#/$defs/ApiObject"
+        },
+        "dns": {
+            "$ref": "#/$defs/DnsObject"
+        },
+        "routing": {
+            "$ref": "#/$defs/RoutingObject"
+        },
+        "policy": {
+            "$ref": "#/$defs/PolicyObject"
+        },
+        "inbounds": {
+            "type": "array",
+            "markdownDescription": "一个数组，每个元素是一个入站连接配置。\n\n入站连接用于接收发来的数据，可用的协议请见入站协议。\n\n`InboundObject` 对应配置文件中 `inbounds` 项的一个子元素。\n\n# InboundObject\n\n```json\n{\n  \"inbounds\": [\n    {\n      \"listen\": \"127.0.0.1\",\n      \"port\": 1080,\n      \"protocol\": \"协议名称\",\n      \"settings\": {},\n      \"streamSettings\": {},\n      \"tag\": \"标识\",\n      \"sniffing\": {\n        \"enabled\": true,\n        \"destOverride\": [\"http\", \"tls\"]\n      },\n      \"allocate\": {\n        \"strategy\": \"always\",\n        \"refresh\": 5,\n        \"concurrency\": 3\n      }\n    }\n  ]\n}\n```",
+            "items": {
+                "$ref": "#/$defs/InboundObject"
+            }
+        },
+        "outbounds": {
+            "type": "array",
+            "markdownDescription": "一个数组，每个元素是一个出站连接配置。\n\n# 出站代理\n\n出站连接用于发送数据，可用的协议请见 [出站协议](https://xtls.github.io/config/outbounds/)。\n\n## OutboundObject\n\n`OutboundObject` 对应配置文件中 `outbounds` 项的一个子元素。\n\n> **提示**\n> 列表中的第一个元素作为主 outbound。当路由匹配不存在或没有匹配成功时，流量由主 outbound 发出。:\n\n```json\n{\n  \"outbounds\": [\n    {\n      \"sendThrough\": \"0.0.0.0\",\n      \"protocol\": \"协议名称\",\n      \"settings\": {},\n      \"tag\": \"标识\",\n      \"streamSettings\": {},\n      \"proxySettings\": {\n        \"tag\": \"another-outbound-tag\"\n      },\n      \"mux\": {}\n    }\n  ]\n}\n```",
+            "items": {
+                "$ref": "#/$defs/OutboundObject"
+            }
+        },
+        "transport": {
+            "$ref": "#/$defs/TransportObject"
+        },
+        "stats": {
+            "$ref": "#/$defs/StatsObject"
+        },
+        "reverse": {
+            "$ref": "#/$defs/ReverseObject"
+        },
+        "fakedns": {
+            "$ref": "#/$defs/FakeDNSObject"
+        }
+    },
+    "$defs": {
+        "_common_": {
+            "map<string, string>": {
+                "type": "object",
+                "patternProperties": {
+                    ".*": {
+                        "type": "string"
+                    }
+                }
+            },
+            "map<string, list<string>>": {
+                "type": "object",
+                "patternProperties": {
+                    ".*": {
+                        "$ref": "#/$defs/_common_/list<string>"
+                    }
+                }
+            },
+            "list<string>": {
+                "type": "array",
+                "items": {
+                    "type": "string"
+                }
+            },
+            "port": {
+                "$ref": "#/$defs/_common_/port",
+                "minimum": 1,
+                "maximum": 65535
+            },
+            "portOrString": {
+                "oneOf": [
+                    {
+                        "$ref": "#/$defs/_common_/port"
+                    },
+                    {
+                        "type": "string"
+                    }
+                ]
+            },
+            "policyLevel": {
+                "type": "number",
+                "markdownDescription": "用户等级，连接会使用这个用户等级对应的 [本地策略](https://xtls.github.io/config/policy.html#levelpolicyobject)。\n\n`level` 的值, 对应 [policy](https://xtls.github.io/config/policy.html#levelpolicyobject) 中 `level` 的值。 如不指定, 默认为 0。"
+            }
+        },
+        "_dns_": {
+            "address": {
+                "type": "string",
+                "enum": [
+                    "localhost",
+                    "tcp://",
+                    "tcp+local://",
+                    "https://",
+                    "https+local://",
+                    "quic+local://",
+                    "fakedns"
+                ],
+                "markdownDescription": "当值为 `\"localhost\"` 时，表示使用本机预设的 DNS 配置。\n\n当它的值是一个 DNS `\"IP:Port\"` 地址时，如 `\"8.8.8.8:53\"`，Xray 会使用此地址的指定 UDP 端口进行 DNS 查询。该查询遵循路由规则。不指定端口时，默认使用 53 端口。\n\n当值是 `\"tcp://host:port\"` 的形式，如 `\"tcp://8.8.8.8:53\"`，Xray 会使用 `DNS over TCP` 进行查询。该查询遵循路由规则。不指定端口时，默认使用 53 端口。\n\n当值是 `\"tcp+local://host:port\"` 的形式，如 `\"tcp+local://8.8.8.8:53\"`，Xray 会使用 `TCP 本地模式 (TCPL)` 进行查询。即 DNS 请求不会经过路由组件，直接通过 Freedom outbound 对外请求，以降低耗时。不指定端口时，默认使用 53 端口。\n\n当值是 `\"https://host:port/dns-query\"` 的形式，如 `\"https://dns.google/dns-query\"`，Xray 会使用 `DNS over HTTPS` (RFC8484, 简称 DOH) 进行查询。有些服务商拥有 IP 别名的证书，可以直接写 IP 形式，比如 `https://1.1.1.1/dns-query`。也可使用非标准端口和路径，如 `\"https://a.b.c.d:8443/my-dns-query\"`\n\n当值是 `\"https+local://host:port/dns-query\"` 的形式，如 `\"https+local://dns.google/dns-query\"`，Xray 会使用 `DOH 本地模式 (DOHL)` 进行查询，即 DOH 请求不会经过路由组件，直接通过 Freedom outbound 对外请求，以降低耗时。一般适合在服务端使用。也可使用非标端口和路径。\n\n当值是 `\"quic+local://host\"` 的形式，如 `\"quic+local://dns.adguard.com\"`，Xray 会使用 `DNS over QUIC 本地模式 (DOQL)` 进行查询，即 DNS 请求不会经过路由组件，直接通过 Freedom outbound 对外请求。该方式需要 DNS 服务器支持 DNS over QUIC。默认使用 784 端口进行查询，可以使用非标端口。\n\n当值是 `fakedns` 时，将使用 FakeDNS 功能进行查询。\n\n> **TIP 1**\n> 当使用 `localhost` 时，本机的 DNS 请求不受 Xray 控制，需要额外的配置才可以使 DNS 请求由 Xray 转发。\n\n> **TIP 2**\n> 不同规则初始化得到的 DNS 客户端会在 Xray 启动日志中以 `info` 级别体现，比如 `local DOH`、`remote DOH` 和 `udp` 等模式。\n> TIP 3\n> (v1.4.0+) 可以在 [日志](https://xtls.github.io/config/log.html) 中打开 DNS 查询日志。"
+            }
+        },
+        "_routing_": {
+            "_rule": {
+                "domain": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            "regexp:",
+                            "domain:",
+                            "full:",
+                            "geosite:",
+                            "ext:"
+                        ]
+                    }
+                },
+                "ip": {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            "geoip:",
+                            "ext:"
+                        ]
+                    }
+                },
+                "RuleObject": {
+                    "type": "object",
+                    "markdownDescription": "# RuleObject\n\n```json\n{\n  \"domainMatcher\": \"hybrid\",\n  \"type\": \"field\",\n  \"domain\": [\"baidu.com\", \"qq.com\", \"geosite:cn\"],\n  \"ip\": [\"0.0.0.0/8\", \"10.0.0.0/8\", \"fc00::/7\", \"fe80::/10\", \"geoip:cn\"],\n  \"port\": \"53,443,1000-2000\",\n  \"sourcePort\": \"53,443,1000-2000\",\n  \"network\": \"tcp\",\n  \"source\": [\"10.0.0.1\"],\n  \"user\": [\"love@xray.com\"],\n  \"inboundTag\": [\"tag-vmess\"],\n  \"protocol\": [\"http\", \"tls\", \"bittorrent\"],\n  \"attrs\": \"attrs[':method'] == 'GET'\",\n  \"outboundTag\": \"direct\",\n  \"balancerTag\": \"balancer\"\n}\n```\n\n> **警告**\n> 当多个属性同时指定时，这些属性需要**同时**满足，才可以使当前规则生效。",
+                    "properties": {
+                        "domainMatcher": {
+                            "type": "string",
+                            "markdownDescription": "域名匹配算法，根据不同的设置使用不同的算法。此处选项优先级高于 `RoutingObject` 中配置的 `domainMatcher`。\n\n- `\"hybrid\"`：使用新的域名匹配算法，速度更快且占用更少。默认值。\n- `\"linear\"`：使用原来的域名匹配算法。",
+                            "enum": [
+                                "hybrid",
+                                "linear"
+                            ]
+                        },
+                        "type": {
+                            "type": "string",
+                            "markdownDescription": "目前只支持`\"field\"`这一个选项。",
+                            "enum": [
+                                "field"
+                            ]
+                        },
+                        "domain": {
+                            "$ref": "#/$defs/_routing_/_rule/domain",
+                            "markdownDescription": "一个数组，数组每一项是一个域名的匹配。有以下几种形式：\n\n- 纯字符串：当此字符串匹配目标域名中任意部分，该规则生效。比如 \"sina.com\" 可以匹配 \"sina.com\"、\"sina.com.cn\" 和 \"www.sina.com\"，但不匹配 \"sina.cn\"。\n- 正则表达式：由 `\"regexp:\"` 开始，余下部分是一个正则表达式。当此正则表达式匹配目标域名时，该规则生效。例如 \"regexp:\\\\\\\\.goo.\\*\\\\\\\\.com\\$\" 匹配 \"www.google.com\" 或 \"fonts.googleapis.com\"，但不匹配 \"google.com\"。\n- 子域名（推荐）：由 `\"domain:\"` 开始，余下部分是一个域名。当此域名是目标域名或其子域名时，该规则生效。例如 \"domain:xray.com\" 匹配 \"www.xray.com\"、\"xray.com\"，但不匹配 \"wxray.com\"。\n- 完整匹配：由 `\"full:\"` 开始，余下部分是一个域名。当此域名完整匹配目标域名时，该规则生效。例如 \"full:xray.com\" 匹配 \"xray.com\" 但不匹配 \"www.xray.com\"。\n- 预定义域名列表：由 `\"geosite:\"` 开头，余下部分是一个名称，如 `geosite:google` 或者 `geosite:cn`。名称及域名列表参考 [预定义域名列表](#预定义域名列表)。\n- 从文件中加载域名：形如 `\"ext:file:tag\"`，必须以 `ext:`（小写）开头，后面跟文件名和标签，文件存放在 [资源目录](./features/env.md#资源文件路径) 中，文件格式与 `geosite.dat` 相同，标签必须在文件中存在。\n\n> **提示**\n> `\"ext:geoip.dat:cn\"` 等价于 `\"geoip:cn\"`"
+                        },
+                        "ip": {
+                            "$ref": "#/$defs/_routing_/_rule/ip",
+                            "markdownDescription": "一个数组，数组内每一项代表一个 IP 范围。当某一项匹配目标 IP 时，此规则生效。有以下几种形式：\n\n- IP：形如 `\"127.0.0.1\"`。\n- [CIDR](https://en.wikipedia.org/wiki/Classless_Inter-Domain_routing_)：形如 `\"10.0.0.0/8\"`。\n- 预定义 IP 列表：此列表预置于每一个 Xray 的安装包中，文件名为 `geoip.dat`。使用方式形如 `\"geoip:cn\"`，必须以 `geoip:`（小写）开头，后面跟双字符国家代码，支持几乎所有可以上网的国家。\n  - 特殊值：`\"geoip:private\"`，包含所有私有地址，如 `127.0.0.1`。\n- 从文件中加载 IP：形如 `\"ext:file:tag\"`，必须以 `ext:`（小写）开头，后面跟文件名和标签，文件存放在 [资源目录](./features/env.md#资源文件路径) 中，文件格式与 `geoip.dat` 相同标签必须在文件中存在。"
+                        },
+                        "port": {
+                            "$ref": "#/$defs/_common_/portOrString",
+                            "markdownDescription": "目标端口范围，有三种形式：\n\n- `\"a-b\"`：a 和 b 均为正整数，且小于 65536。这个范围是一个前后闭合区间，当目标端口落在此范围内时，此规则生效。\n- `a`：a 为正整数，且小于 65536。当目标端口为 a 时，此规则生效。\n- 以上两种形式的混合，以逗号 \",\" 分隔。形如：`\"53,443,1000-2000\"`。"
+                        },
+                        "sourcePort": {
+                            "$ref": "#/$defs/_common_/portOrString",
+                            "markdownDescription": "来源端口，有三种形式：\n\n- `\"a-b\"`：a 和 b 均为正整数，且小于 65536。这个范围是一个前后闭合区间，当目标端口落在此范围内时，此规则生效。\n- `a`：a 为正整数，且小于 65536。当目标端口为 a 时，此规则生效。\n- 以上两种形式的混合，以逗号 \",\" 分隔。形如：`\"53,443,1000-2000\"`。"
+                        },
+                        "network": {
+                            "type": "string",
+                            "markdownDescription": "可选的值有 \"tcp\"、\"udp\" 或 \"tcp,udp\"，当连接方式是指定的方式时，此规则生效。",
+                            "enum": [
+                                "tcp",
+                                "udp",
+                                "tcp,udp"
+                            ]
+                        },
+                        "source": {
+                            "type": "string",
+                            "markdownDescription": "一个数组，数组内每一项代表一个 IP 范围，形式有 IP、CIDR、GeoIP 和从文件中加载 IP。当某一项匹配来源 IP 时，此规则生效。"
+                        },
+                        "user": {
+                            "$ref": "#/$defs/_common_/list<string>",
+                            "markdownDescription": "一个数组，数组内每一项是一个邮箱地址。当某一项匹配来源用户时，此规则生效。"
+                        },
+                        "inboundTag": {
+                            "$ref": "#/$defs/_common_/list<string>",
+                            "markdownDescription": "一个数组，数组内每一项是一个标识。当某一项匹配入站协议的标识时，此规则生效。"
+                        },
+                        "protocol": {
+                            "type": "string",
+                            "markdownDescription": "一个数组，数组内每一项表示一种协议。当某一个协议匹配当前连接的协议类型时，此规则生效。\n\n> **提示**\n> 必须开启入站代理中的 `sniffing` 选项, 才能嗅探出连接所使用的协议类型.",
+                            "enum": [
+                                "http",
+                                "tls",
+                                "bittorrent"
+                            ]
+                        },
+                        "attrs": {
+                            "type": "string",
+                            "markdownDescription": "一段脚本，用于检测流量的属性值。当此脚本返回真值时，此规则生效。\n\n脚本语言为 [Starlark](https://github.com/bazelbuild/starlark)，它的语法是 Python 的子集。脚本接受一个全局变量 `attrs`，其中包含了流量相关的属性。\n\n目前只有 http 入站代理会设置这一属性。\n\n示例：\n\n- 检测 HTTP GET：`\"attrs[':method'] == 'GET'\"`\n- 检测 HTTP Path：`\"attrs[':path'].startswith('/test')\"`\n- 检测 Content Type：`\"attrs['accept'].index('text/html') >= 0\"`"
+                        },
+                        "outboundTag": {
+                            "type": "string",
+                            "markdownDescription": "对应一个 outbound 的标识。\n\n> **提示**\n> `balancerTag` 和 `outboundTag` 须二选一。当同时指定时，`outboundTag` 生效。"
+                        },
+                        "balancerTag": {
+                            "type": "string",
+                            "markdownDescription": "对应一个 Balancer 的标识。\n\n> **提示**\n> `balancerTag` 和 `outboundTag` 须二选一。当同时指定时，`outboundTag` 生效。"
+                        }
+                    }
+                }
+            },
+            "BalancerObject": {
+                "type": "object",
+                "markdownDescription": "# BalancerObject\n\n负载均衡器配置。当一个负载均衡器生效时，它会从指定的 outbound 中，按配置选出一个最合适的 outbound，进行流量转发。\n\n```json\n{\n  \"tag\": \"balancer\",\n  \"selector\": []\n}\n```",
+                "properties": {
+                    "tag": {
+                        "type": "string",
+                        "markdownDescription": "此负载均衡器的标识，用于匹配 `RuleObject` 中的 `balancerTag`。"
+                    },
+                    "selector": {
+                        "$ref": "#/$defs/_common_/list<string>",
+                        "markdownDescription": "一个字符串数组，其中每一个字符串将用于和 outbound 标识的前缀匹配。在以下几个 outbound 标识中：`[ \"a\", \"ab\", \"c\", \"ba\" ]`，`\"selector\": [\"a\"]` 将匹配到 `[ \"a\", \"ab\" ]`。\n\n如果匹配到多个 outbound，负载均衡器目前会从中随机选出一个作为最终的 outbound。"
+                    }
+                }
+            }
+        },
+        "_policy_": {
+            "LevelPolicyObject": {
+                "type": "object",
+                "properties": {
+                    "handshake": {
+                        "type": "number",
+                        "markdownDescription": "连接建立时的握手时间限制。单位为秒。默认值为 `4`。在入站代理处理一个新连接时，在握手阶段如果使用的时间超过这个时间，则中断该连接。"
+                    },
+                    "connIdle": {
+                        "type": "number",
+                        "markdownDescription": "连接空闲的时间限制。单位为秒。默认值为 `300`。inbound/outbound 处理一个连接时，如果在 `connIdle` 时间内，没有任何数据被传输（包括上行和下行数据），则中断该连接。"
+                    },
+                    "uplinkOnly": {
+                        "type": "number",
+                        "markdownDescription": "当连接下行线路关闭后的时间限制。单位为秒。默认值为 `2`。当服务器（如远端网站）关闭下行连接时，出站代理会在等待 `uplinkOnly` 时间后中断连接。"
+                    },
+                    "downlinkOnly": {
+                        "type": "number",
+                        "markdownDescription": "当连接上行线路关闭后的时间限制。单位为秒。默认值为 `5`。当客户端（如浏览器）关闭上行连接时，入站代理会在等待 `downlinkOnly` 时间后中断连接。\n\n> **提示**\n> 在 HTTP 浏览的场景中，可以将 `uplinkOnly` 和 `downlinkOnly` 设为 `0`，以提高连接关闭的效率。"
+                    },
+                    "statsUserUplink": {
+                        "type": "boolean",
+                        "markdownDescription": "当值为 `true` 时，开启当前等级的所有用户的上行流量统计。"
+                    },
+                    "statsUserDownlink": {
+                        "type": "boolean",
+                        "markdownDescription": "当值为 `true` 时，开启当前等级的所有用户的下行流量统计。"
+                    },
+                    "bufferSize": {
+                        "type": "number",
+                        "markdownDescription": "每个连接的内部缓存大小。单位为 kB。当值为 `0` 时，内部缓存被禁用。\n\n默认值:\n\n- 在 ARM、MIPS、MIPSLE 平台上，默认值为 `0`。\n- 在 ARM64、MIPS64、MIPS64LE 平台上，默认值为 `4`。\n- 在其它平台上，默认值为 `512`。"
+                    }
+                }
+            },
+            "SystemPolicyObject": {
+                "type": "object",
+                "markdownDescription": "Xray 系统级别的策略\n\n```json\n{\n  \"statsInboundUplink\": false,\n  \"statsInboundDownlink\": false,\n  \"statsOutboundUplink\": false,\n  \"statsOutboundDownlink\": false\n}\n```",
+                "properties": {
+                    "statsInboundUplink": {
+                        "type": "boolean",
+                        "markdownDescription": "当值为 `true` 时，开启所有入站代理的上行流量统计。"
+                    },
+                    "statsInboundDownlink": {
+                        "type": "boolean",
+                        "markdownDescription": "当值为 `true` 时，开启所有入站代理的下行流量统计。"
+                    },
+                    "statsOutboundUplink": {
+                        "type": "boolean",
+                        "markdownDescription": "当值为 `true` 时，开启所有出站代理的上行流量统计。"
+                    },
+                    "statsOutboundDownlink": {
+                        "type": "boolean",
+                        "markdownDescription": "当值为 `true` 时，开启所有出站代理的下行流量统计。"
+                    }
+                }
+            }
+        },
+        "_inbound_": {
+            "dokodemo": {
+                "type": "object",
+                "properties": {
+                    "address": {
+                        "type": "string",
+                        "markdownDescription": "将流量转发到此地址。可以是一个 IP 地址，形如 `\"1.2.3.4\"`，或者一个域名，形如 `\"xray.com\"`。字符串类型。\n\n当 `followRedirect`（见下文）为 `true` 时，`address` 可为空。"
+                    },
+                    "port": {
+                        "$ref": "#/$defs/_common_/port",
+                        "markdownDescription": "将流量转发到目标地址的指定端口，范围 \\[1, 65535\\]，数值类型。必填参数。"
+                    },
+                    "network": {
+                        "type": "string",
+                        "markdownDescription": "可接收的网络协议类型。比如当指定为 `\"tcp\"` 时，仅会接收 TCP 流量。默认值为 `\"tcp\"`。",
+                        "enum": [
+                            "tcp",
+                            "udp",
+                            "tcp,udp"
+                        ]
+                    },
+                    "timeout": {
+                        "type": "number",
+                        "markdownDescription": "连接空闲的时间限制。单位为秒。默认值为 `300`。处理一个连接时，如果在 `timeout` 时间内，没有任何数据被传输，则中断该连接。"
+                    },
+                    "followRedirect": {
+                        "type": "boolean",
+                        "markdownDescription": "当值为 `true` 时，dokodemo-door 会识别出由 iptables 转发而来的数据，并转发到相应的目标地址。\n\n可参考 [传输配置](https://xtls.github.io/config/transport.html#sockoptobject) 中的 `tproxy` 设置。"
+                    },
+                    "userLevel": {
+                        "$ref": "#/$defs/_common_/policyLevel"
+                    }
+                },
+                "required": [
+                    "port"
+                ]
+            },
+            "http": {
+                "type": "object",
+                "properties": {
+                    "timeout": {
+                        "type": "number",
+                        "markdownDescription": "连接空闲的时间限制。单位为秒。默认值为 `300`, 0 表示不限时。\n\n处理一个连接时，如果在 `timeout` 时间内，没有任何数据被传输，则中断该连接。"
+                    },
+                    "accounts": {
+                        "type": "array",
+                        "markdownDescription": "一个数组，数组中每个元素为一个用户帐号。默认值为空。\n\n当 `accounts` 非空时，HTTP 代理将对入站连接进行 Basic Authentication 验证。\n\n```json\n{\n  \"user\": \"my-username\",\n  \"pass\": \"my-password\"\n}\n```",
+                        "items": {
+                            "$ref": "#/$defs/_inbound_/_http_/account"
+                        }
+                    },
+                    "allowTransparent": {
+                        "type": "boolean",
+                        "markdownDescription": "当为 `true` 时，会转发所有 HTTP 请求，而非只是代理请求。\n\n> **提示**\n> 若配置不当，开启此选项会导致死循环。"
+                    },
+                    "userLevel": {
+                        "$ref": "#/$defs/_common_/policyLevel"
+                    }
+                }
+            },
+            "shadowsocks": {
+                "type": "object",
+                "properties": {
+                    "network": {
+                        "type": "string",
+                        "markdownDescription": "可接收的网络协议类型。比如当指定为 `\"tcp\"` 时，仅会接收 TCP 流量。默认值为 `\"tcp\"`。",
+                        "enum": [
+                            "tcp",
+                            "udp",
+                            "tcp,udp"
+                        ]
+                    },
+                    "method": {
+                        "type": "string",
+                        "markdownDescription": "必填。",
+                        "enum": [
+                            "2022-blake3-aes-128-gcm",
+                            "2022-blake3-aes-256-gcm",
+                            "2022-blake3-chacha20-poly1305",
+                            "aes-256-gcm",
+                            "aes-128-gcm",
+                            "chacha20-poly1305",
+                            "chacha20-ietf-poly1305",
+                            "xchacha20-poly1305",
+                            "xchacha20-ietf-poly1305",
+                            "none",
+                            "plain"
+                        ]
+                    },
+                    "password": {
+                        "type": "string",
+                        "markdownDescription": "必填。"
+                    },
+                    "level": {
+                        "$ref": "#/$defs/_common_/policyLevel"
+                    },
+                    "email": {
+                        "type": "string",
+                        "markdownDescription": "用户邮箱，用于区分不同用户的流量（日志、统计）。"
+                    }
+                },
+                "required": [
+                    "method",
+                    "password"
+                ]
+            },
+            "socks": {
+                "type": "object",
+                "properties": {
+                    "auth": {
+                        "type": "string",
+                        "markdownDescription": "Socks 协议的认证方式，支持 `\"noauth\"` 匿名方式和 `\"password\"` 用户密码方式。\n\n默认值为 `\"noauth\"`。",
+                        "enum": [
+                            "noauth",
+                            "password"
+                        ]
+                    },
+                    "accounts": {
+                        "type": "array",
+                        "markdownDescription": "一个数组，数组中每个元素为一个用户帐号。\n\n此选项仅当 `auth` 为 `password` 时有效。\n\n默认值为空。",
+                        "items": {
+                            "$ref": "#/$defs/_inbound_/_socks_/account"
+                        }
+                    },
+                    "udp": {
+                        "type": "boolean",
+                        "markdownDescription": "是否开启 UDP 协议的支持。\n\n默认值为 `false`。"
+                    },
+                    "ip": {
+                        "type": "string",
+                        "markdownDescription": "当开启 UDP 时，Xray 需要知道本机的 IP 地址。\n\n默认值为 `\"127.0.0.1\"`。"
+                    },
+                    "userLevel": {
+                        "$ref": "#/$defs/_common_/policyLevel"
+                    }
+                }
+            },
+            "trojan": {
+                "type": "object",
+                "properties": {
+                    "clients": {
+                        "type": "array",
+                        "markdownDescription": "一个数组，代表一组服务端认可的用户.\n\n其中每一项是一个用户 [ClientObject](https://xtls.github.io/config/inbounds/trojan.html#clientobject)。",
+                        "items": {
+                            "$ref": "#/$defs/_inbound_/_trojan_/ClientObject"
+                        }
+                    },
+                    "fallbacks": {
+                        "type": "array",
+                        "markdownDescription": "一个数组，包含一系列强大的回落分流配置（可选）。\nfallbacks 的具体配置请点击[FallbackObject](https://xtls.github.io/config/features/fallback.html)\n\n> **提示**\n> Xray 的 Trojan 有完整的 fallbacks 支持，配置方式完全一致。\n> 触发回落的条件也与 VLESS 类似：首包长度 < 58 或第 57 个字节不为 `\\r`（因为 Trojan 没有协议版本）或身份认证失败。",
+                        "items": {
+                            "$ref": "#/$defs/_inbound_/FallbackObject"
+                        }
+                    }
+                }
+            },
+            "vless": {
+                "type": "object",
+                "properties": {
+                    "clients": {
+                        "type": "array",
+                        "markdownDescription": "一个数组，代表一组服务端认可的用户.\n\n其中每一项是一个用户 [ClientObject](https://xtls.github.io/config/inbounds/vless.html#clientobject)。",
+                        "items": {
+                            "$ref": "#/$defs/_inbound_/_vless_/ClientObject"
+                        }
+                    },
+                    "decryption": {
+                        "type": "string",
+                        "markdownDescription": "现阶段需要填 `\"none\"`，不能留空。\n若未正确设置 decryption 的值，使用 Xray 或 -test 时会收到错误信息。\n\n注意这里是 decryption，和 clients 同级。\ndecryption 和 vmess 协议的 encryption 的位置不同，是因为若套一层约定加密，服务端需要先解密才能知道是哪个用户。",
+                        "enum": [
+                            "none"
+                        ]
+                    },
+                    "fallbacks": {
+                        "type": "array",
+                        "markdownDescription": "一个数组，包含一系列强大的回落分流配置（可选）。\nfallbacks 的具体配置请点击 [FallbackObject](https://xtls.github.io/config/features/fallback.html)",
+                        "items": {
+                            "$ref": "#/$defs/_inbound_/FallbackObject"
+                        }
+                    }
+                }
+            },
+            "vmess": {
+                "type": "object",
+                "properties": {
+                    "clients": {
+                        "type": "array",
+                        "markdownDescription": "一个数组，代表一组服务端认可的用户.\n\n其中每一项是一个用户[ClientObject](https://xtls.github.io/config/inbounds/vmess.html#clientobject)。\n\n当此配置用作动态端口时，Xray 会自动创建用户。",
+                        "items": {
+                            "$ref": "#/$defs/_inbound_/_vmess_/ClientObject"
+                        }
+                    },
+                    "detour": {
+                        "$ref": "#/$defs/_inbound_/_vmess_/DetourObject"
+                    },
+                    "default": {
+                        "$ref": "#/$defs/_inbound_/_vmess_/DefaultObject"
+                    },
+                    "disableInsecureEncryption": {
+                        "type": "boolean",
+                        "markdownDescription": "是否禁止客户端使用不安全的加密方式，如果设置为 true 当客户端指定下列加密方式时，服务器会主动断开连接。\n\n- `\"none\"`\n- `\"aes-128-cfb\"`\n\n默认值为`false`。"
+                    }
+                }
+            },
+            "_http_": {
+                "account": {
+                    "type": "object",
+                    "properties": {
+                        "user": {
+                            "type": "string",
+                            "markdownDescription": "用户名，字符串类型。必填。"
+                        },
+                        "pass": {
+                            "type": "string",
+                            "markdownDescription": "密码，字符串类型。必填。"
+                        }
+                    },
+                    "required": [
+                        "user",
+                        "pass"
+                    ]
+                }
+            },
+            "_socks_": {
+                "account": {
+                    "type": "object",
+                    "properties": {
+                        "user": {
+                            "type": "string",
+                            "markdownDescription": "用户名，字符串类型。必填。"
+                        },
+                        "pass": {
+                            "type": "string",
+                            "markdownDescription": "密码，字符串类型。必填。"
+                        }
+                    },
+                    "required": [
+                        "user",
+                        "pass"
+                    ]
+                }
+            },
+            "_trojan_": {
+                "ClientObject": {
+                    "type": "object",
+                    "properties": {
+                        "password": {
+                            "type": "string",
+                            "markdownDescription": "必填，任意字符串。"
+                        },
+                        "email": {
+                            "type": "string",
+                            "markdownDescription": "邮件地址，可选，用于标识用户\n\n> **警告**\n> 如果存在多个 ClientObject, 请注意 email 不可以重复。"
+                        },
+                        "level": {
+                            "$ref": "#/$defs/_common_/policyLevel"
+                        }
+                    },
+                    "required": [
+                        "password"
+                    ]
+                }
+            },
+            "_vless_": {
+                "ClientObject": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string",
+                            "markdownDescription": "VLESS 的用户 ID，可以是任意小于 30 字节的字符串, 也可以是一个合法的 UUID.\n自定义字符串和其映射的 UUID 是等价的, 这意味着你将可以这样在配置文件中写 id 来标识同一用户,即\n\n- 写 `\"id\": \"我爱🍉老师1314\"`,\n- 或写 `\"id\": \"5783a3e7-e373-51cd-8642-c83782b807c5\"` (此 UUID 是 `我爱🍉老师1314` 的 UUID 映射)\n\n其映射标准在 [VLESS UUID 映射标准：将自定义字符串映射为一个 UUIDv5](https://github.com/XTLS/Xray-core/issues/158)\n\n你可以使用命令 `xray uuid -i \"自定义字符串\"` 生成自定义字符串所映射的的 UUID。\n\n> 也可以使用命令 `xray uuid` 生成随机的 UUID."
+                        },
+                        "level": {
+                            "$ref": "#/$defs/_common_/policyLevel"
+                        },
+                        "email": {
+                            "type": "string",
+                            "markdownDescription": "用户邮箱，用于区分不同用户的流量（会体现在日志、统计中）。"
+                        },
+                        "flow": {
+                            "type": "string",
+                            "markdownDescription": "流控模式，用于选择 XTLS 的算法。\n\n目前入站协议中有以下流控模式可选：\n\n- 无 `flow`，空字符或者 `none`：使用普通 TLS 代理\n- `xtls-rprx-vision`：使用新 XTLS 模式 包含内层握手随机填充\n\n此外，目前 XTLS 仅支持 TCP、mKCP、DomainSocket 这三种传输方式。",
+                            "enum": [
+                                "",
+                                "none",
+                                "xtls-rprx-vision"
+                            ]
+                        }
+                    }
+                }
+            },
+            "_vmess_": {
+                "ClientObject": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string",
+                            "markdownDescription": "Vmess 的用户 ID，可以是任意小于 30 字节的字符串, 也可以是一个合法的 UUID.\n\n> **提示**\n> 自定义字符串和其映射的 UUID 是等价的, 这意味着你将可以这样在配置文件中写 id 来标识同一用户,即\n> \n> - 写 `\"id\": \"我爱🍉老师1314\"`,\n> - 或写 `\"id\": \"5783a3e7-e373-51cd-8642-c83782b807c5\"` (此 UUID 是 `我爱🍉老师1314` 的 UUID 映射)  \n\n其映射标准在 [VLESS UUID 映射标准：将自定义字符串映射为一个 UUIDv5](https://github.com/XTLS/Xray-core/issues/158)\n\n你可以使用命令 `xray uuid -i \"自定义字符串\"` 生成自定义字符串所映射的的 UUID。\n\n> > 也可以使用命令 `xray uuid` 生成随机的 UUID."
+                        },
+                        "level": {
+                            "$ref": "#/$defs/_common_/policyLevel"
+                        },
+                        "alterId": {
+                            "type": "number",
+                            "markdownDescription": "为了进一步防止被探测，一个用户可以在主 ID 的基础上，再额外生成多个 ID。这里只需要指定额外的 ID 的数量，推荐值为 0 代表启用 VMessAEAD。\n最大值 65535。这个值不能超过服务器端所指定的值。\n\n不指定的话，默认值是 0。\n\n> **提示**\n> 客户端 AlterID 设置为 0 代表启用 VMessAEAD ；服务端为自动适配，可同时兼容启用和未开启 VMessAEAD 的客户端。\n> 客户端可通过设置环境变量 `Xray_VMESS_AEAD_DISABLED=true` 强行禁用 VMessAEAD"
+                        },
+                        "email": {
+                            "type": "string",
+                            "markdownDescription": "用户邮箱地址，用于区分不同用户的流量。"
+                        }
+                    }
+                },
+                "DetourObject": {
+                    "type": "object",
+                    "properties": {
+                        "to": {
+                            "type": "string",
+                            "markdownDescription": "一个 inbound 的`tag`, 指定的 inbound 的必须是使用 VMess 协议的 inbound."
+                        }
+                    }
+                },
+                "DefaultObject": {
+                    "type": "object",
+                    "properties": {
+                        "level": {
+                            "$ref": "#/$defs/_common_/policyLevel"
+                        },
+                        "alterId": {
+                            "type": "number",
+                            "markdownDescription": "动态端口的默认`alterId`，默认值为`0`。"
+                        }
+                    }
+                }
+            },
+            "FallbackObject": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "markdownDescription": "尝试匹配 TLS SNI(Server Name Indication)，空为任意，默认为 \"\""
+                    },
+                    "alpn": {
+                        "type": "string",
+                        "markdownDescription": "尝试匹配 TLS ALPN 协商结果，空为任意，默认为 \"\"\n\n有需要时，VLESS 才会尝试读取 TLS ALPN 协商结果，若成功，输出 info `realAlpn =` 到日志。\n用途：解决了 Nginx 的 h2c 服务不能同时兼容 http/1.1 的问题，Nginx 需要写两行 listen，分别用于 1.1 和 h2c。\n注意：fallbacks alpn 存在 `\"h2\"` 时，[Inbound TLS](https://xtls.github.io/config/transport.html#tlsobject) 需设置 `\"alpn\":[\"h2\",\"http/1.1\"]`，以支持 h2 访问。\n\n::: tip\nFallback 内设置的 `alpn` 是匹配实际协商出的 ALPN，而 Inbound TLS 设置的 `alpn` 是握手时可选的 ALPN 列表，两者含义不同。"
+                    },
+                    "path": {
+                        "type": "string",
+                        "markdownDescription": "尝试匹配首包 HTTP PATH，空为任意，默认为空，非空则必须以 `/` 开头，不支持 h2c。\n\n智能：有需要时，VLESS 才会尝试看一眼 PATH（不超过 55 个字节；最快算法，并不完整解析 HTTP），若成功，输出 INFO 日志 `realPath =`。\n用途：分流其它 inbound 的 WebSocket 流量或 HTTP 伪装流量，没有多余处理、纯粹转发流量，理论性能比 Nginx 更强。\n\n注意：**fallbacks 所在入站本身必须是 TCP+TLS**，这是分流至其它 WS 入站用的，被分流的入站则无需配置 TLS。"
+                    },
+                    "dest": {
+                        "$ref": "#/$defs/_common_/portOrString",
+                        "markdownDescription": "决定 TLS 解密后 TCP 流量的去向，目前支持两类地址：（该项必填，否则无法启动）\n\n1. TCP，格式为 `\"addr:port\"`，其中 addr 支持 IPv4、域名、IPv6，若填写域名，也将直接发起 TCP 连接（而不走内置的 DNS）。\n2. Unix domain socket，格式为绝对路径，形如 `\"/dev/shm/domain.socket\"`，可在开头加 `@` 代表 [abstract](https://www.man7.org/linux/man-pages/man7/unix.7.html)，`@@` 则代表带 padding 的 abstract。\n\n若只填 port，数字或字符串均可，形如 `80`、`\"80\"`，通常指向一个明文 http 服务（addr 会被补为 `\"127.0.0.1\"`）。"
+                    },
+                    "xver": {
+                        "type": "number",
+                        "markdownDescription": "发送 [PROXY protocol](https://www.haproxy.org/download/2.2/doc/proxy-protocol.txt)，专用于传递请求的真实来源 IP 和端口，填版本 1 或 2，默认为 0，即不发送。若有需要建议填 1。\n\n目前填 1 或 2，功能完全相同，只是结构不同，且前者可打印，后者为二进制。Xray 的 TCP 和 WS 入站均已支持接收 PROXY protocol。\n\n> **注意**\n> 若你正在 [配置 Nginx 接收 PROXY protocol](https://docs.nginx.com/nginx/admin-guide/load-balancer/using-proxy-protocol/#configuring-nginx-to-accept-the-proxy-protocol)，除了设置 proxy_protocol 外，还需设置 set_real_ip_from，否则可能会出问题。"
+                    }
+                }
+            }
+        },
+        "_outbound_": {
+            "OutboundConfigurationObject": {
+                "oneOf": [
+                    {
+                        "$ref": "#/$defs/_outbound_/blackhole"
+                    },
+                    {
+                        "$ref": "#/$defs/_outbound_/blackhole"
+                    }
+                ]
+            },
+            "blackhole": {
+                "type": "object",
+                "markdownDescription": "# Blackhole\n\nBlackhole（黑洞）是一个出站数据协议，它会阻碍所有数据的出站，配合 [路由配置](https://xtls.github.io/config/routing.html) 一起使用，可以达到禁止访问某些网站的效果。\n\n## OutboundConfigurationObject\n\n```json\n{\n  \"response\": {\n    \"type\": \"none\"\n  }\n}\n```",
+                "properties": {
+                    "response": {
+                        "$ref": "#/$defs/_outbound_/_blackhole_/ResponseObject",
+                        "markdownDescription": "配置黑洞的响应数据。\n\nBlackhole 会在收到待转发数据之后，发送指定的响应数据，然后关闭连接，待转发的数据将被丢弃。\n如不指定此项，Blackhole 将直接关闭连接。\n\n# ResponseObject\n\n```json\n{\n  \"type\": \"none\"\n}\n```"
+                    }
+                }
+            },
+            "_blackhole_": {
+                "ResponseObject": {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "markdownDescription": "当 `type` 为 `\"none\"`（默认值）时，Blackhole 将直接关闭连接。\n\n当 `type` 为 `\"http\"` 时，Blackhole 会发回一个简单的 HTTP 403 数据包，然后关闭连接。",
+                            "enum": [
+                                "http",
+                                "none"
+                            ]
+                        }
+                    }
+                }
+            },
+            "dns": {
+                "type": "object",
+                "markdownDescription": "# DNS\n\nDNS 是一个出站协议，主要用于拦截和转发 DNS 查询。\n\n此出站协议只能接收 DNS 流量（包含基于 UDP 和 TCP 协议的查询），其它类型的流量会导致错误。\n\n在处理 DNS 查询时，此出站协议会将 IP 查询（即 A 和 AAAA）转发给内置的 [DNS 服务器](https://xtls.github.io/config/dns.html)。其它类型的查询流量将被转发至它们原本的目标地址。\n\n## OutboundConfigurationObject\n\n```json\n{\n  \"network\": \"tcp\",\n  \"address\": \"1.1.1.1\",\n  \"port\": 53\n}\n```",
+                "properties": {
+                    "network": {
+                        "type": "string",
+                        "markdownDescription": "修改 DNS 流量的传输层协议，可选的值有 `\"tcp\"` 和 `\"udp\"`。当不指定时，保持来源的传输方式不变。",
+                        "enum": [
+                            "tcp",
+                            "udp"
+                        ]
+                    },
+                    "address": {
+                        "type": "string",
+                        "markdownDescription": "修改 DNS 服务器地址。当不指定时，保持来源中指定的地址不变。"
+                    },
+                    "port": {
+                        "$ref": "#/$defs/_common_/port"
+                    }
+                }
+            },
+            "freedom": {
+                "type": "object",
+                "markdownDescription": "# Freedom\n\nFreedom 是一个出站协议，可以用来向任意网络发送（正常的） TCP 或 UDP 数据。\n\n## OutboundConfigurationObject\n\n```json\n{\n  \"domainStrategy\": \"AsIs\",\n  \"redirect\": \"127.0.0.1:3366\",\n  \"userLevel\": 0\n}\n```",
+                "properties": {
+                    "domainStrategy": {
+                        "type": "string",
+                        "markdownDescription": "在目标地址为域名时, 配置相应的值, Freedom 的行为模式如下:\n\n- `\"AsIs\"`: Freedom 通过系统 DNS 服务器解析获取 IP, 向此域名发出连接.\n- `\"UseIP\"`、`\"UseIPv4\"` 和 `\"UseIPv6\"`: Xray 使用 [内置 DNS 服务器](https://xtls.github.io/config/dns.html) 解析获取 IP, 向此域名发出连接.\n  默认值为 `\"AsIs\"`。\n\n> **TIP 1**\n> 当使用 `\"UseIP\"` 模式，并且 [出站连接配置](https://xtls.github.io/config/outbound.html#outboundobject) 中指定了 `sendThrough` 时，Freedom 会根据 `sendThrough` 的值自动判断所需的 IP 类型，IPv4 或 IPv6。\n\n> **TIP 2**\n> 当使用 `\"UseIPv4\"` 或 `\"UseIPv6\"` 模式时，Freedom 会只使用对应的 IPv4 或 IPv6 地址。当 `sendThrough` 指定了不匹配的本地地址时，将导致连接失败。",
+                        "enum": [
+                            "AsIs",
+                            "UseIP",
+                            "UseIPv4",
+                            "UseIPv6"
+                        ]
+                    },
+                    "redirect": {
+                        "type": "string",
+                        "markdownDescription": "Freedom 会强制将所有数据发送到指定地址（而不是 inbound 指定的地址）。\n\n其值为一个字符串，样例：`\"127.0.0.1:80\"`，`\":1234\"`。\n\n当地址不指定时，如 `\":443\"`，Freedom 不会修改原先的目标地址。\n当端口为 `0` 时，如 `\"xray.com: 0\"`，Freedom 不会修改原先的端口。"
+                    },
+                    "userLevel": {
+                        "$ref": "#/$defs/_common_/policyLevel"
+                    }
+                }
+            },
+            "http": {
+                "type": "object",
+                "markdownDescription": "HTTP 服务器列表，其中每一项是一个服务器配置，若配置多个，循环使用 (RoundRobin)。",
+                "properties": {
+                    "servers": {
+                        "type": "array",
+                        "markdownDescription": "# ServerObject\n\n```json\n{\n  \"address\": \"192.168.108.1\",\n  \"port\": 3128,\n  \"users\": [\n    {\n      \"user\": \"my-username\",\n      \"pass\": \"my-password\"\n    }\n  ]\n}\n```",
+                        "items": {
+                            "$ref": "#/$defs/_outbound_/_http_/ServerObject"
+                        }
+                    }
+                }
+            },
+            "_http_": {
+                "ServerObject": {
+                    "type": "object",
+                    "properties": {
+                        "address": {
+                            "type": "string",
+                            "markdownDescription": "HTTP 代理服务器地址，必填。"
+                        },
+                        "port": {
+                            "$ref": "#/$defs/_common_/port",
+                            "markdownDescription": "HTTP 代理服务器端口，必填。"
+                        },
+                        "users": {
+                            "type": "array",
+                            "markdownDescription": "一个数组，数组中每个元素为一个用户帐号。默认值为空。",
+                            "items": {
+                                "$ref": "#/$defs/_outbound_/_http_/AccountObject"
+                            }
+                        }
+                    },
+                    "required": [
+                        "address",
+                        "port"
+                    ]
+                },
+                "AccountObject": {
+                    "type": "object",
+                    "properties": {
+                        "user": {
+                            "type": "string",
+                            "markdownDescription": "用户名，字符串类型。必填。"
+                        },
+                        "pass": {
+                            "type": "string",
+                            "markdownDescription": "密码，字符串类型。必填。"
+                        }
+                    },
+                    "required": [
+                        "user",
+                        "pass"
+                    ]
+                }
+            },
+            "shadowsocks": {
+                "type": "object",
+                "properties": {
+                    "servers": {
+                        "type": "array",
+                        "markdownDescription": "一个数组，代表一组 Shadowsocks 服务端设置, 其中每一项是一个 [ServerObject](https://xtls.github.io/config/outbounds/shadowsocks.html#serverobject)。",
+                        "items": {
+                            "$ref": "#/$defs/_outbound_/_shadowsocks_/ServerObject"
+                        }
+                    }
+                }
+            },
+            "_shadowsocks_": {
+                "ServerObject": {
+                    "type": "object",
+                    "markdownDescription": "# Shadowsocks\n\n[Shadowsocks](https://zh.wikipedia.org/wiki/Shadowsocks) 协议，兼容大部分其它版本的实现。\n\n目前兼容性如下：\n\n- 支持 TCP 和 UDP 数据包转发，其中 UDP 可选择性关闭；\n- 推荐的加密方式：\n  - 2022-blake3-aes-128-gcm\n  - 2022-blake3-aes-256-gcm\n  - 2022-blake3-chacha20-poly1305\n- 其他加密方式\n  - aes-256-gcm\n  - aes-128-gcm\n  - chacha20-poly1305 或称 chacha20-ietf-poly1305\n  - none 或 plain\n\nShadowsocks 2022 新协议格式提升了性能并带有完整的重放保护，解决了旧协议的以下安全问题：\n\n- [Shadowsocks AEAD 加密方式设计存在严重漏洞，无法保证通信内容的可靠性](https://github.com/shadowsocks/shadowsocks-org/issues/183)\n- 原有 TCP 重放过滤器误报率随时间增加\n- 没有 UDP 重放保护\n- 可用于主动探测的 TCP 行为\n\n> **警告**\n> \"none\" 不加密方式下流量将明文传输。为确保安全性, 不要在公共网络上使用。\n\n## OutboundConfigurationObject\n\n```json\n{\n  \"servers\": [\n    {\n      \"email\": \"love@xray.com\",\n      \"address\": \"127.0.0.1\",\n      \"port\": 1234,\n      \"method\": \"加密方式\",\n      \"password\": \"密码\",\n      \"level\": 0\n    }\n  ]\n}\n```",
+                    "properties": {
+                        "email": {
+                            "type": "string",
+                            "markdownDescription": "邮件地址，可选，用于标识用户"
+                        },
+                        "address": {
+                            "type": "string",
+                            "markdownDescription": "Shadowsocks 服务端地址，支持 IPv4、IPv6 和域名。必填。"
+                        },
+                        "port": {
+                            "$ref": "#/$defs/_common_/port",
+                            "markdownDescription": "Shadowsocks 服务端端口。必填。"
+                        },
+                        "method": {
+                            "type": "string",
+                            "markdownDescription": "必填。",
+                            "enum": [
+                                "2022-blake3-aes-128-gcm",
+                                "2022-blake3-aes-256-gcm",
+                                "2022-blake3-chacha20-poly1305",
+                                "aes-256-gcm",
+                                "aes-128-gcm",
+                                "chacha20-poly1305",
+                                "chacha20-ietf-poly1305",
+                                "none",
+                                "plain"
+                            ]
+                        },
+                        "password": {
+                            "type": "string",
+                            "markdownDescription": "必填。"
+                        },
+                        "uot": {
+                            "type": "boolean",
+                            "markdownDescription": "当开启后，会启用`udp over tcp`。"
+                        },
+                        "level": {
+                            "$ref": "#/$defs/_common_/policyLevel"
+                        }
+                    },
+                    "required": [
+                        "address",
+                        "port",
+                        "method",
+                        "password"
+                    ]
+                }
+            },
+            "socks": {
+                "type": "object",
+                "markdownDescription": "# Socks\n\n标准 Socks 协议实现，兼容 Socks 5。\n\n> **警告**\n> **Socks 协议没有对传输加密，不适宜经公网中传输**\n\n## OutboundConfigurationObject\n\n```json\n{\n  \"servers\": [\n    {\n      \"address\": \"127.0.0.1\",\n      \"port\": 1234,\n      \"users\": [\n        {\n          \"user\": \"test user\",\n          \"pass\": \"test pass\",\n          \"level\": 0\n        }\n      ]\n    }\n  ]\n}\n```",
+                "properties": {
+                    "servers": {
+                        "type": "array",
+                        "markdownDescription": "Socks 服务器列表，其中每一项是一个服务器配置。\n\n# ServerObject\n\n```json\n{\n  \"address\": \"127.0.0.1\",\n  \"port\": 1234,\n  \"users\": [\n    {\n      \"user\": \"test user\",\n      \"pass\": \"test pass\",\n      \"level\": 0\n    }\n  ]\n}\n```",
+                        "items": {
+                            "$ref": "#/$defs/_outbound_/_socks_/ServerObject"
+                        }
+                    }
+                }
+            },
+            "_socks_": {
+                "ServerObject": {
+                    "type": "object",
+                    "properties": {
+                        "address": {
+                            "type": "string",
+                            "markdownDescription": "服务器地址, 必填\n\n> **提示**\n> 仅支持连接到 Socks 5 服务器。"
+                        },
+                        "port": {
+                            "$ref": "#/$defs/_common_/port",
+                            "markdownDescription": "服务器端口, 必填"
+                        },
+                        "users": {
+                            "type": "array",
+                            "markdownDescription": "一个数组表示的用户列表，数组中每个元素为一个用户配置。\n\n当列表不为空时，Socks 客户端会使用用户信息进行认证；如未指定，则不进行认证。\n\n默认值为空。\n\n# UserObject\n\n```json\n{\n  \"user\": \"test user\",\n  \"pass\": \"test pass\",\n  \"level\": 0\n}\n```",
+                            "items": {
+                                "$ref": "#/$defs/_outbound_/_socks_/UserObject"
+                            }
+                        },
+                        "level": {
+                            "$ref": "#/$defs/_common_/policyLevel"
+                        }
+                    },
+                    "required": [
+                        "address",
+                        "port"
+                    ]
+                },
+                "UserObject": {
+                    "type": "object",
+                    "properties": {
+                        "user": {
+                            "type": "string",
+                            "markdownDescription": "用户名，字符串类型。必填。"
+                        },
+                        "pass": {
+                            "type": "string",
+                            "markdownDescription": "密码，字符串类型。必填。"
+                        }
+                    },
+                    "required": [
+                        "user",
+                        "pass"
+                    ]
+                }
+            },
+            "trojan": {
+                "type": "object",
+                "markdownDescription": "# Trojan\n\n[Trojan](https://trojan-gfw.github.io/trojan/protocol) 协议\n\n> **警告**\nTrojan 被设计工作在正确配置的加密 TLS 隧道\n\n## OutboundConfigurationObject\n\n```json\n{\n  \"servers\": [\n    {\n      \"address\": \"127.0.0.1\",\n      \"port\": 1234,\n      \"password\": \"password\",\n      \"email\": \"love@xray.com\",\n      \"level\": 0\n    }\n  ]\n}\n```",
+                "properties": {
+                    "servers": {
+                        "type": "array",
+                        "markdownDescription": "一个数组，其中每一项是一个 [ServerObject](https://xtls.github.io/config/outbounds/trojan.html#serverobject)。\n\n# ServerObject\n\n```json\n{\n  \"address\": \"127.0.0.1\",\n  \"port\": 1234,\n  \"password\": \"password\",\n  \"email\": \"love@xray.com\",\n  \"level\": 0\n}\n```",
+                        "items": {
+                            "$ref": "#/$defs/_outbound_/_trojan_/ServerObject"
+                        }
+                    }
+                }
+            },
+            "_trojan_": {
+                "ServerObject": {
+                    "type": "object",
+                    "properties": {
+                        "address": {
+                            "type": "string",
+                            "markdownDescription": "服务端地址，支持 IPv4、IPv6 和域名。必填。"
+                        },
+                        "port": {
+                            "$ref": "#/$defs/_common_/port",
+                            "markdownDescription": "服务端端口，通常与服务端监听的端口相同。"
+                        },
+                        "password": {
+                            "type": "string",
+                            "markdownDescription": "密码. 必填，任意字符串。"
+                        },
+                        "email": {
+                            "type": "string",
+                            "markdownDescription": "邮件地址，可选，用于标识用户"
+                        },
+                        "level": {
+                            "$ref": "#/$defs/_common_/policyLevel"
+                        }
+                    }
+                }
+            },
+            "vless": {
+                "type": "object",
+                "markdownDescription": "# VLESS\n\n> **警告**\n> 目前 VLESS 没有自带加密，请用于可靠信道，如 TLS。\n\nVLESS 是一个无状态的轻量传输协议，它分为入站和出站两部分，可以作为 Xray 客户端和服务器之间的桥梁。\n\n与 [VMess](https://xtls.github.io/config/outbounds/vmess.html) 不同，VLESS 不依赖于系统时间，认证方式同样为 UUID，但不需要 alterId。\n\n## OutboundConfigurationObject\n\n```json\n{\n  \"vnext\": [\n    {\n      \"address\": \"example.com\",\n      \"port\": 443,\n      \"users\": [\n        {\n          \"id\": \"5783a3e7-e373-51cd-8642-c83782b807c5\",\n          \"encryption\": \"none\",\n          \"flow\": \"xtls-rprx-vision\",\n          \"level\": 0\n        }\n      ]\n    }\n  ]\n}\n```",
+                "properties": {
+                    "vnext": {
+                        "type": "array",
+                        "markdownDescription": "一个数组, 表示 VLESS 服务器列表，包含一组指向服务端的配置, 其中每一项是一个服务器配置。\n\n# ServerObject\n\n```json\n{\n  \"address\": \"example.com\",\n  \"port\": 443,\n  \"users\": [\n    {\n      \"id\": \"5783a3e7-e373-51cd-8642-c83782b807c5\",\n      \"encryption\": \"none\",\n      \"flow\": \"xtls-rprx-vision\",\n      \"level\": 0\n    }\n  ]\n}\n```",
+                        "items": {
+                            "$ref": "#/$defs/_outbound_/_vless_/ServerObject"
+                        }
+                    }
+                }
+            },
+            "_vless_": {
+                "ServerObject": {
+                    "type": "object",
+                    "properties": {
+                        "address": {
+                            "type": "string",
+                            "markdownDescription": "服务端地址，指向服务端，支持域名、IPv4、IPv6。"
+                        },
+                        "port": {
+                            "$ref": "#/$defs/_common_/port",
+                            "markdownDescription": "服务端端口，通常与服务端监听的端口相同。"
+                        },
+                        "users": {
+                            "type": "array",
+                            "markdownDescription": "数组, 一组服务端认可的用户列表, 其中每一项是一个用户配置\n\n# UserObject\n\n```json\n{\n  \"id\": \"5783a3e7-e373-51cd-8642-c83782b807c5\",\n  \"encryption\": \"none\",\n  \"flow\": \"xtls-rprx-vision\",\n  \"level\": 0\n}\n```",
+                            "items": {
+                                "$ref": "#/$defs/_outbound_/_vless_/UserObject"
+                            }
+                        }
+                    }
+                },
+                "UserObject": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string",
+                            "markdownDescription": "VLESS 的用户 ID，可以是任意小于 30 字节的字符串, 也可以是一个合法的 UUID.\n自定义字符串和其映射的 UUID 是等价的, 这意味着你将可以这样在配置文件中写 id 来标识同一用户,即\n\n- 写 `\"id\": \"我爱🍉老师1314\"`,\n- 或写 `\"id\": \"5783a3e7-e373-51cd-8642-c83782b807c5\"` (此 UUID 是 `我爱🍉老师1314` 的 UUID 映射)\n\n其映射标准在 [VLESS UUID 映射标准：将自定义字符串映射为一个 UUIDv5](https://github.com/XTLS/Xray-core/issues/158)\n\n你可以使用命令 `xray uuid -i \"自定义字符串\"` 生成自定义字符串所映射的的 UUID，也可以使用命令 `xray uuid` 生成随机的 UUID。"
+                        },
+                        "encryption": {
+                            "type": "string",
+                            "markdownDescription": "需要填 `\"none\"`，不能留空。\n\n该要求是为了提醒使用者没有加密，也为了以后出加密方式时，防止使用者填错属性名或填错位置导致裸奔。\n\n若未正确设置 encryption 的值，使用 Xray 或 -test 时会收到错误信息。",
+                            "enum": [
+                                "none"
+                            ]
+                        },
+                        "flow": {
+                            "type": "string",
+                            "markdownDescription": "流控模式，用于选择 XTLS 的算法。\n\n目前出站协议中有以下流控模式可选：\n\n- 无 `flow`，空字符或者 `none`：使用普通 TLS 代理\n- `xtls-rprx-vision`：使用新 XTLS 模式 包含内层握手随机填充 支持 uTLS 模拟客户端指纹\n- `xtls-rprx-vision-udp443`：同 `xtls-rprx-vision`, 但是放行了目标为 443 端口的 UDP 流量\n\n此外，目前 XTLS 仅支持 TCP、mKCP、DomainSocket 这三种传输方式。\n\n> **关于 xtls-rprx-*-udp443 流控模式**\n>\n> 启用了 Xray-core 的 XTLS 时，通往 UDP 443 端口的流量默认会被拦截（一般情况下为 QUIC），这样应用就不会使用 QUIC 而会使用 TLS，XTLS 才会真正生效。实际上，QUIC 本身也不适合被代理，因为 QUIC 自带了 TCP 的功能，它作为 UDP 流量在通过 VLESS 协议传输时，底层协议为 TCP，就相当于两层 TCP 了。\n>\n> 若不需要拦截，请在客户端填写 `xtls-rprx-*-udp443`，服务端不变。\n\n> **关于 Splice 模式**\n> Splice 是 Linux Kernel 提供的函数，系统内核直接转发 TCP，不再经过 Xray 的内存，大大减少了数据拷贝、CPU 上下文切换的次数。\n>\n> Splice 模式的的使用限制：\n>\n> - Linux 环境\n> - 入站协议为 `Dokodemo door`、`Socks`、`HTTP` 等纯净的 TCP 连接, 或其它使用了 XTLS 的入站协议\n> - 出站协议为 VLESS + XTLS\n> - 需要注意的是，使用 mKCP 协议时不会使用 Splice（是的，虽然没有报错，但实际上根本没用到）\n>\n> 此外，使用 Splice 时网速显示会滞后，这是特性，不是 bug。\n>\n> 使用 Vision 模式 如果满足上述条件 会自动启用 Splice",
+                            "enum": [
+                                "none",
+                                "xtls-rprx-vision",
+                                "xtls-rprx-vision-udp443"
+                            ]
+                        },
+                        "level": {
+                            "$ref": "#/$defs/_common_/policyLevel"
+                        }
+                    }
+                }
+            },
+            "vmess": {
+                "type": "object",
+                "markdownDescription": "# VMess\n\n[VMess](https://xtls.github.io/development/protocols/vmess.html) 是一个加密传输协议，通常作为 Xray 客户端和服务器之间的桥梁。\n\n> **警告**\n> VMess 依赖于系统时间，请确保使用 Xray 的系统 UTC 时间误差在 90 秒之内，时区无关。在 Linux 系统中可以安装`ntp`服务来自动同步系统时间。\n\n## OutboundConfigurationObject\n\n```json\n{\n  \"vnext\": [\n    {\n      \"address\": \"127.0.0.1\",\n      \"port\": 37192,\n      \"users\": [\n        {\n          \"id\": \"5783a3e7-e373-51cd-8642-c83782b807c5\",\n          \"alterId\": 0,\n          \"security\": \"auto\",\n          \"level\": 0\n        }\n      ]\n    }\n  ]\n}\n```",
+                "properties": {
+                    "vnext": {
+                        "type": "array",
+                        "markdownDescription": "一个数组，包含一组的服务端配置.\n\n其中每一项是一个服务端配置[ServerObject](https://xtls.github.io/config/outbounds/vmess.html#serverobject)。\n\n# ServerObject\n\n```json\n{\n  \"address\": \"127.0.0.1\",\n  \"port\": 37192,\n  \"users\": []\n}\n```",
+                        "items": {
+                            "$ref": "#/$defs/_outbound_/_vmess_/ServerObject"
+                        }
+                    }
+                }
+            },
+            "_vmess_": {
+                "ServerObject": {
+                    "type": "object",
+                    "properties": {
+                        "address": {
+                            "type": "string",
+                            "markdownDescription": "服务端地址，支持 IP 地址或者域名。"
+                        },
+                        "port": {
+                            "$ref": "#/$defs/_common_/port",
+                            "markdownDescription": "服务端监听的端口号, 必填。"
+                        },
+                        "users": {
+                            "type": "array",
+                            "markdownDescription": "一个数组，代表一组服务端认可的用户.\n\n其中每一项是一个用户[UserObject](https://xtls.github.io/config/outbounds/vmess.html#userobject)。\n\n# UserObject\n\n```json\n{\n  \"id\": \"5783a3e7-e373-51cd-8642-c83782b807c5\",\n  \"alterId\": 0,\n  \"security\": \"auto\",\n  \"level\": 0\n}\n```",
+                            "items": {
+                                "$ref": "#/$defs/_outbound_/_vmess_/UserObject"
+                            }
+                        }
+                    },
+                    "required": [
+                        "port"
+                    ]
+                },
+                "UserObject": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string",
+                            "markdownDescription": "Vmess 的用户 ID，可以是任意小于 30 字节的字符串, 也可以是一个合法的 UUID.\n\n自定义字符串和其映射的 UUID 是等价的, 这意味着你将可以这样在配置文件中写 id 来标识同一用户,即\n\n- 写 `\"id\": \"我爱🍉老师1314\"`,\n- 或写 `\"id\": \"5783a3e7-e373-51cd-8642-c83782b807c5\"` (此 UUID 是 `我爱🍉老师1314` 的 UUID 映射)\n\n其映射标准在 [VLESS UUID 映射标准：将自定义字符串映射为一个 UUIDv5](https://github.com/XTLS/Xray-core/issues/158)\n\n你可以使用命令 `xray uuid -i \"自定义字符串\"` 生成自定义字符串所映射的的 UUID, 也可以使用命令 `xray uuid` 生成随机的 UUID。"
+                        },
+                        "alterId": {
+                            "type": "number",
+                            "markdownDescription": "为了进一步防止被探测，一个用户可以在主 ID 的基础上，再额外生成多个 ID。这里只需要指定额外的 ID 的数量，推荐值为 0 代表启用 VMessAEAD。\n最大值 65535。这个值不能超过服务器端所指定的值。\n\n不指定的话，默认值是 0。\n\n> **提示**\n> 客户端 AlterID 设置为 0 代表启用 VMessAEAD ；服务端为自动适配，可同时兼容启用和未开启 VMessAEAD 的客户端。\n> 客户端可通过设置环境变量 `Xray_VMESS_AEAD_DISABLED=true` 强行禁用 VMessAEAD",
+                            "minimum": 0,
+                            "maximum": 65535
+                        },
+                        "level": {
+                            "$ref": "#/$defs/_common_/policyLevel"
+                        },
+                        "security": {
+                            "type": "string",
+                            "markdownDescription": "加密方式，客户端将使用配置的加密方式发送数据，服务器端自动识别，无需配置。\n\n- `\"aes-128-gcm\"`：推荐在 PC 上使用\n- `\"chacha20-poly1305\"`：推荐在手机端使用\n- `\"auto\"`：默认值，自动选择（运行框架为 AMD64、ARM64 或 s390x 时为 aes-128-gcm 加密方式，其他情况则为 Chacha20-Poly1305 加密方式）\n- `\"none\"`：不加密\n\n* `\"zero\"`：不加密，也不进行消息认证 (v1.4.0+)\n\n> **提示**\n> 推荐使用`\"auto\"`加密方式，这样可以永久保证安全性和兼容性。\n>\n> `\"none\"` 伪加密方式会计算并验证数据包的校验数据，由于认证算法没有硬件支持，在部分平台可能速度比有硬件加速的 `\"aes-128-gcm\"` 还慢。\n>\n> `\"zero\"` 伪加密方式不会加密消息也不会计算数据的校验数据，因此理论上速度会高于其他任何加密方式。实际速度可能受到其他因素影响。\n>\n> 不推荐在未开启 TLS 加密并强制校验证书的情况下使用 `\"none\"` `\"zero\"` 伪加密方式。\n> 如果使用 CDN 或其他会解密 TLS 的中转平台或网络环境建立连接，不建议使用 `\"none\"` `\"zero\"` 伪加密方式。\n>\n> 无论使用哪种加密方式， VMess 的包头都会受到加密和认证的保护。",
+                            "enum": [
+                                "aes-128-gcm",
+                                "chacha20-poly1305",
+                                "auto",
+                                "none",
+                                "zero"
+                            ]
+                        }
+                    }
+                }
+            },
+            "wireguard": {
+                "type": "object",
+                "markdownDescription": "# Wireguard\n\n标准 Wireguard 协议实现。\n\n> **警告**\n> **Wireguard 协议并非专门为翻墙而设计，若在最外层过墙，存在特征可能导致服务器被封锁**\n\n## OutboundConfigurationObject\n\n```json\n{\n  \"secretKey\": \"PRIVATE_KEY\",\n  \"address\": [\n    // optional, default [\"10.0.0.1\", \"fd59:7153:2388:b5fd:0000:0000:0000:0001\"]\n    \"IPv4_CIDR\",\n    \"IPv6_CIDR\",\n    \"and more...\"\n  ],\n  \"peers\": [\n    {\n      \"endpoint\": \"ENDPOINT_ADDR\",\n      \"publicKey\": \"PUBLIC_KEY\"\n    }\n  ],\n  \"mtu\": 1420, // optional, default 1420\n  \"workers\": 2 // optional, default runtime.NumCPU()\n}\n```\n\n> **提示**\n> 目前 Wireguard 协议 outbound 中不支持设置 `streamSettings`",
+                "properties": {
+                    "secretKey": {
+                        "type": "string",
+                        "markdownDescription": "用户私钥。必填。"
+                    },
+                    "address": {
+                        "type": "array",
+                        "markdownDescription": "Wireguard 会在本地开启虚拟网卡 tun。使用一个或多个 IP 地址，支持 IPv6",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "mtu": {
+                        "type": "number",
+                        "markdownDescription": "Wireguard 底层 tun 的分片大小"
+                    },
+                    "workers": {
+                        "type": "number",
+                        "markdownDescription": "Wireguard 使用线程数"
+                    },
+                    "peers": {
+                        "type": "array",
+                        "markdownDescription": "Wireguard 服务器列表，其中每一项是一个服务器配置。\n\n# Peers\n\n```json\n{\n  \"endpoint\": \"ENDPOINT_ADDR\",\n  \"publicKey\": \"PUBLIC_KEY\",\n  \"preSharedKey\": \"PRE_SHARED_KEY\", // optional, default \"0000000000000000000000000000000000000000000000000000000000000000\"\n  \"keepAlive\": 0, // optional, default 0\n  \"allowedIPs\": [\"0.0.0.0/0\"] // optional, default [\"0.0.0.0/0\", \"::/0\"]\n}\n```",
+                        "items": {
+                            "$ref": "#/$defs/_outbound_/_wireguard_/Peers"
+                        }
+                    }
+                },
+                "required": [
+                    "secretKey"
+                ]
+            },
+            "_wireguard_": {
+                "Peers": {
+                    "type": "object",
+                    "properties": {
+                        "endpoint": {
+                            "type": "string",
+                            "markdownDescription": "服务器地址, 必填\n\n> **提示**\n> 使用 url:端口号 格式，形如 `engage.cloudflareclient.com:2408`"
+                        },
+                        "publicKey": {
+                            "type": "string",
+                            "markdownDescription": "服务器公钥，用于验证, 必填"
+                        },
+                        "preSharedKey": {
+                            "type": "string",
+                            "markdownDescription": "额外的对称加密密钥"
+                        },
+                        "keepAlive": {
+                            "type": "number",
+                            "markdownDescription": "心跳包时间间隔，单位为秒，默认为 0 表示无心跳"
+                        },
+                        "allowedIPs": {
+                            "type": "array",
+                            "markdownDescription": "Wireguard 仅允许特定源 IP 的流量",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "required": [
+                        "endpoint",
+                        "publicKey"
+                    ]
+                }
+            }
+        },
+        "_transport_": {
+            "StreamSettingsObject": {
+                "type": "object",
+                "properties": {
+                    "network": {
+                        "type": "string",
+                        "markdownDescription": "连接的数据流所使用的传输方式类型，默认值为 `\"tcp\"`",
+                        "enum": [
+                            "tcp",
+                            "kcp",
+                            "ws",
+                            "http",
+                            "domainsocket",
+                            "quic",
+                            "grpc"
+                        ]
+                    },
+                    "security": {
+                        "type": "string",
+                        "markdownDescription": "是否启用传输层加密，支持的选项有\n\n- `\"none\"` 表示不加密（默认值）\n- `\"tls\"` 表示使用 [TLS](https://en.wikipedia.org/wiki/base/transport_Layer_Security)。\n- `\"reality\"` 表示使用 REALITY。",
+                        "enum": [
+                            "none",
+                            "tls",
+                            "reality"
+                        ]
+                    },
+                    "tlsSettings": {
+                        "$ref": "#/$defs/_transport_/TLSObject",
+                        "markdownDescription": "TLS 配置。TLS 由 Golang 提供，通常情况下 TLS 协商的结果为使用 TLS 1.3，不支持 DTLS。\n\n# TLSObject\n\n```json\n{\n  \"serverName\": \"xray.com\",\n  \"rejectUnknownSni\": false,\n  \"allowInsecure\": false,\n  \"alpn\": [\"h2\", \"http/1.1\"],\n  \"minVersion\": \"1.2\",\n  \"maxVersion\": \"1.3\",\n  \"cipherSuites\": \"此处填写你需要的加密套件名称,每个套件名称之间用:进行分隔\",\n  \"certificates\": [],\n  \"disableSystemRoot\": false,\n  \"enableSessionResumption\": false,\n  \"fingerprint\": \"\",\n  \"pinnedPeerCertificateChainSha256\": [\"\"]\n}\n```"
+                    },
+                    "realitySettings": {
+                        "$ref": "#/$defs/_transport_/RealityObject",
+                        "markdownDescription": "Reality 配置。Reality 是 Xray 的原创黑科技。 Reality 比 TLS 的安全性更高, 配置方式也和 TLS 一致.\n\n> **提示**\n> Reality 是目前最安全的传输加密方案, 且外部看来流量类型和正常上网具有一致性。 启用 Reality 并且配置合适的 XTLS Vision 流控模式, 可以\n> 达到数倍甚至十几倍的性能提升。\n\n# RealityObject\n\n```json\n{\n  \"show\": false,\n  \"dest\": \"example.com:443\",\n  \"xver\": 0,\n  \"serverNames\": [\"example.com\", \"www.example.com\"],\n  \"privateKey\": \"\",\n  \"minClientVer\": \"\",\n  \"maxClientVer\": \"\",\n  \"maxTimeDiff\": 0,\n  \"shortIds\": [\"\", \"0123456789abcdef\"],\n  \"shortId\": \"\",\n  \"fingerprint\": \"chrome\",\n  \"serverName\": \"\",\n  \"publicKey\": \"\",\n  \"shortId\": \"\",\n  \"spiderX\": \"\"\n}\n```\n\n> **提示**\n> 更多信息请参考 [REALITY 项目](https://github.com/XTLS/REALITY)."
+                    },
+                    "tcpSettings": {
+                        "$ref": "#/$defs/_transport_/TcpObject",
+                        "markdownDescription": "当前连接的 TCP 配置，仅当此连接使用 TCP 时有效。配置内容与上面的全局配置相同。\n\n# TCP\n\nTCP 传输模式是目前推荐使用的传输模式之一.\n\n可以和各种协议有多种组合模式.\n\n## TcpObject\n\n`TcpObject` 对应传输配置的 `tcpSettings` 项。\n\n```json\n{\n  \"acceptProxyProtocol\": false,\n  \"header\": {\n    \"type\": \"none\"\n  }\n}\n```"
+                    },
+                    "kcpSettings": {
+                        "$ref": "#/$defs/_transport_/KcpObject",
+                        "markdownDescription": "当前连接的 mKCP 配置，仅当此连接使用 mKCP 时有效。配置内容与上面的全局配置相同。\n\n# mKCP\n\nmKCP 使用 UDP 来模拟 TCP 连接。\n\nmKCP 牺牲带宽来降低延迟。传输同样的内容，mKCP 一般比 TCP 消耗更多的流量。\n\n> **提示**\n> 请确定主机上的防火墙配置正确\n\n## KcpObject\n\n`KcpObject` 对应传输配置的 `kcpSettings` 项。\n\n```json\n{\n  \"mtu\": 1350,\n  \"tti\": 20,\n  \"uplinkCapacity\": 5,\n  \"downlinkCapacity\": 20,\n  \"congestion\": false,\n  \"readBufferSize\": 1,\n  \"writeBufferSize\": 1,\n  \"header\": {\n    \"type\": \"none\"\n  },\n  \"seed\": \"Password\"\n}\n```"
+                    },
+                    "wsSettings": {
+                        "$ref": "#/$defs/_transport_/WebSocketObject",
+                        "markdownDescription": "当前连接的 WebSocket 配置，仅当此连接使用 WebSocket 时有效。配置内容与上面的全局配置相同。\n\n# WebSocket\n\n使用标准的 WebSocket 来传输数据。\n\nWebSocket 连接可以被其它 HTTP 服务器（如 Nginx）分流，也可以被 VLESS fallbacks path 分流。\n\n> **提示**\n> Websocket 会识别 HTTP 请求的 X-Forwarded-For 头来覆写流量的源地址，优先级高于 PROXY protocol。\n\n## WebSocketObject\n\n`WebSocketObject` 对应传输配置的 `wsSettings` 项。\n\n```json\n{\n  \"acceptProxyProtocol\": false,\n  \"path\": \"/\",\n  \"headers\": {\n    \"Host\": \"xray.com\"\n  }\n}\n```"
+                    },
+                    "httpSettings": {
+                        "$ref": "#/$defs/_transport_/HttpObject",
+                        "markdownDescription": "当前连接的 HTTP/2 配置，仅当此连接使用 HTTP/2 时有效。配置内容与上面的全局配置相同。\n\n# HTTP/2\n\n基于 HTTP/2 的传输方式。\n\n它完整按照 HTTP/2 标准实现，可以通过其它的 HTTP 服务器（如 Nginx）进行中转。\n\n由 HTTP/2 的建议，客户端和服务器必须同时开启 TLS 才可以正常使用这个传输方式。\n\nHTTP/2 内置多路复用，不建议使用 HTTP/2 时启用 mux.cool。\n\n> **提示**\n> 当前版本的 HTTP/2 的传输方式并不强制要求**入站**（**服务端**）有 TLS 配置.\n> 这使得可以在特殊用途的分流部署环境中，由外部网关组件完成 TLS 层对话，Xray 作为后端应用，网关和 Xray 间使用称为 `h2c` 的明文 http/2 进行通讯。\n\n> **注意**\n> ⚠️ 如果你正在使用回落，请注意下列事项：\n>\n> - 请确认 (x)tlsSettings.alpn 中包含 h2，否则 HTTP/2 无法完成 TLS 握手。\n> - HTTP/2 无法通过 Path 进行分流，建议使用 SNI 分流。\n\n## HttpObject\n\n`HttpObject` 对应传输配置的 `httpSettings` 项。\n\n```json\n{\n  \"host\": [\"xray.com\"],\n  \"path\": \"/random/path\",\n  \"read_idle_timeout\": 10,\n  \"health_check_timeout\": 15,\n  \"method\": \"PUT\",\n  \"headers\": {\n    \"Header\": [\"value\"]\n  }\n}\n```"
+                    },
+                    "quicSettings": {
+                        "$ref": "#/$defs/_transport_/QUICObject",
+                        "markdownDescription": "当前连接的 QUIC 配置，仅当此连接使用 QUIC 时有效。配置内容与上面的全局配置相同。\n\n# QUIC\n\nQUIC 全称 Quick UDP Internet Connection，是由 Google 提出的使用 UDP 进行多路并发传输的协议。其主要优势是:\n\n1. 减少了握手的延迟（1-RTT 或 0-RTT）\n2. 多路复用，并且没有 TCP 的阻塞问题\n3. 连接迁移，（主要是在客户端）当由 Wifi 转移到 4G 时，连接不会被断开。\n\nQUIC 目前处于实验期，使用了正在标准化过程中的 IETF 实现，不能保证与最终版本的兼容性。\n\n- 默认设定:\n  - 12 字节的 Connection ID\n  - 30 秒没有数据通过时自动断开连接 (可能会影响一些长连接的使用)\n\n## QuicObject\n\n`QuicObject` 对应传输配置的 `quicSettings` 项。\n\n> **警告**\n对接的两端的配置必须完全一致，否则连接失败。\nQUIC 强制要求开启 TLS，在传输配置中没有开启 TLS 时，Xray 会自行签发一个证书进行 TLS 通讯。\n:::\n\n```json\n{\n  \"security\": \"none\",\n  \"key\": \"\",\n  \"header\": {\n    \"type\": \"none\"\n  }\n}\n```"
+                    },
+                    "grpcSettings": {
+                        "$ref": "#/$defs/_transport_/GRPCObject",
+                        "markdownDescription": "当前连接的 gRPC 配置，仅当此连接使用 gRPC 时有效。配置内容与上面的全局配置相同。\n\n# gRPC\n\n基于 gRPC 的传输方式。\n\n它基于 HTTP/2 协议，理论上可以通过其它支持 HTTP/2 的服务器（如 Nginx）进行中转。\ngRPC（HTTP/2）内置多路复用，不建议使用 gRPC 与 HTTP/2 时启用 mux.cool。\n\n> **⚠⚠⚠**\n> \n> - gRPC 不支持指定 Host。请在出站代理地址中填写 **正确的域名** ，或在 `(x)tlsSettings` 中填写 `ServerName`，否则无法连接。\n> - gRPC 不支持回落到其他服务。\n> - gRPC 服务存在被主动探测的风险。建议使用 Caddy 或 Nginx 等反向代理工具，通过 Path 前置分流。\n\n> **提示**\n> 如果您使用 Caddy 或 Nginx 等反向代理，请注意下列事项：\n>\n> - 请确定反向代理服务器开启了 HTTP/2\n> - 请使用 HTTP/2 或 h2c (Caddy)，grpc_pass (Nginx) 连接到 Xray。\n> - 普通模式的 Path 为 `/${serviceName}/Tun`, Multi 模式为 `/${serviceName}/TunMulti`\n> - 如果需要接收客户端 IP，可以通过由 Caddy / Nginx 发送 `X-Real-IP` header 来传递客户端 IP。\n\n> **提示**\n> 如果你正在使用回落，请注意下列事项：\n>\n> - 不建议回落到 gRPC，存在被主动探测的风险。\n> - 请确认`h2` 位于 (x)tlsSettings.alpn 中的第一顺位，否则 gRPC（HTTP/2）可能无法完成 TLS 握手。\n> - gRPC 无法通过进行 Path 分流。\n\n## GRPCObject\n\n`GRPCObject` 对应传输配置的 `grpcSettings` 项。\n\n```json\n{\n  \"serviceName\": \"name\",\n  \"multiMode\": false,\n  \"user_agent\": \"custom user agent\",\n  \"idle_timeout\": 60,\n  \"health_check_timeout\": 20,\n  \"permit_without_stream\": false,\n  \"initial_windows_size\": 0\n}\n```"
+                    },
+                    "dsSettings": {
+                        "$ref": "#/$defs/_transport_/DomainSocketObject",
+                        "markdownDescription": "当前连接的 Domain socket 配置，仅当此连接使用 Domain socket 时有效。配置内容与上面的全局配置相同。\n\n# Domain Socket\n\n> **警告**\n推荐写到 [inbounds](https://xtls.github.io/config/inbound.html) 的 `listen` 处，传输方式可选 TCP、WebSocket、HTTP/2.\n未来这里的 DomainSocket 可能会被弃用。\n:::\n\nDomain Socket 使用标准的 Unix domain socket 来传输数据。\n\n它的优势是使用了操作系统内建的传输通道，而不会占用网络缓存。\n理论上相比起本地环回网络（local loopback）来说，Domain socket 速度略快一些。\n\n目前仅可用于支持 Unix domain socket 的平台，如 Linux 和 macOS。在 Windows 10 Build 17036 前不可用。\n\n如果指定了 domain socket 作为传输方式，在入站出站代理中配置的端口和 IP 地址将会失效，所有的传输由 domain socket 取代。\n\n## DomainSocketObject\n\n`DomainSocketObject` 对应传输配置的 `dsSettings` 项。\n\n```json\n{\n  \"path\": \"/path/to/ds/file\",\n  \"abstract\": false,\n  \"padding\": false\n}\n```"
+                    },
+                    "sockopt": {
+                        "$ref": "#/$defs/_transport_/SockoptObject",
+                        "markdownDescription": "透明代理相关的具体配置。\n\n# SockoptObject\n\n```json\n{\n  \"mark\": 0,\n  \"tcpMaxSeg\": 1440,\n  \"tcpFastOpen\": false,\n  \"tproxy\": \"off\",\n  \"domainStrategy\": \"AsIs\",\n  \"dialerProxy\": \"\",\n  \"acceptProxyProtocol\": false,\n  \"tcpKeepAliveInterval\": 0,\n  \"tcpKeepAliveIdle\": 300,\n  \"tcpUserTimeout\": 10000,\n  \"tcpcongestion\": \"bbr\",\n  \"interface\": \"wg0\"\n}\n```"
+                    }
+                }
+            },
+            "TLSObject": {
+                "type": "object",
+                "properties": {
+                    "serverName": {
+                        "type": "string",
+                        "markdownDescription": "指定服务器端证书的域名，在连接由 IP 建立时有用。\n\n当目标连接由域名指定时，比如在 Socks 入站接收到了域名，或者由 Sniffing 功能探测出了域名，这个域名会自动用于 `serverName`，无须手动配置。"
+                    },
+                    "rejectUnknownSni": {
+                        "type": "boolean",
+                        "markdownDescription": "当值为 `true` 时，服务端接收到的 SNI 与证书域名不匹配即拒绝 TLS 握手，默认为 false。"
+                    },
+                    "alpn": {
+                        "type": "array",
+                        "markdownDescription": "一个字符串数组，指定了 TLS 握手时指定的 ALPN 数值。默认值为 `[\"h2\", \"http/1.1\"]`。",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "http/1.1",
+                                "h2"
+                            ]
+                        }
+                    },
+                    "minVersion": {
+                        "type": "array",
+                        "markdownDescription": "minVersion 为可接受的最小 SSL/TLS 版本。",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "1.0",
+                                "1.1",
+                                "1.2",
+                                "1.3"
+                            ]
+                        },
+                        "uniqueItems": true
+                    },
+                    "maxVersion": {
+                        "type": "array",
+                        "markdownDescription": "minVersion 为可接受的最大 SSL/TLS 版本。",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "1.0",
+                                "1.1",
+                                "1.2",
+                                "1.3"
+                            ]
+                        },
+                        "uniqueItems": true
+                    },
+                    "cipherSuites": {
+                        "type": "array",
+                        "markdownDescription": "CipherSuites 用于配置受支持的密码套件列表, 每个套件名称之间用:进行分隔.\n\n你可以在 [这里](https://golang.org/src/crypto/tls/cipher_suites.go#L500)或 [这里](https://golang.org/src/crypto/tls/cipher_suites.go#L44)\n找到 golang 加密套件的名词和说明\n\n> **警告**\n> 以上两项配置为非必要选项，正常情况下不影响安全性 在未配置的情况下 golang 根据设备自动选择. 若不熟悉, 请勿配置此选项, 填写不当引起的问题自行负责",
+                        "items": {
+                            "type": "string",
+                            "enum": [
+                                "TLS_RSA_WITH_AES_128_CBC_SHA",
+                                "TLS_RSA_WITH_AES_256_CBC_SHA",
+                                "TLS_RSA_WITH_AES_128_GCM_SHA256",
+                                "TLS_RSA_WITH_AES_256_GCM_SHA384",
+                                "TLS_AES_128_GCM_SHA256",
+                                "TLS_AES_256_GCM_SHA384",
+                                "TLS_CHACHA20_POLY1305_SHA256",
+                                "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA",
+                                "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA",
+                                "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA",
+                                "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA",
+                                "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+                                "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+                                "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+                                "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+                                "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256",
+                                "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256"
+                            ]
+                        },
+                        "uniqueItems": true
+                    },
+                    "allowInsecure": {
+                        "type": "boolean",
+                        "markdownDescription": "是否允许不安全连接（仅用于客户端）。默认值为 `false`。\n\n当值为 `true` 时，Xray 不会检查远端主机所提供的 TLS 证书的有效性。\n\n> **警告**\n> 出于安全性考虑，这个选项不应该在实际场景中选择 true，否则可能遭受中间人攻击。"
+                    },
+                    "disableSystemRoot": {
+                        "type": "boolean",
+                        "markdownDescription": "是否禁用操作系统自带的 CA 证书。默认值为 `false`。\n\n当值为 `true` 时，Xray 只会使用 `certificates` 中指定的证书进行 TLS 握手。当值为 `false` 时，Xray 只会使用操作系统自带的 CA 证书进行 TLS 握手。"
+                    },
+                    "enableSessionResumption": {
+                        "type": "boolean",
+                        "markdownDescription": "此参数的设置为 false 时, ClientHello 里没有 session_ticket 这个扩展。 通常来讲 go 语言程序的 ClientHello 里并没有用到这个扩展, 因此建议保持默认值。 默认值为 `false`。"
+                    },
+                    "fingerprint": {
+                        "$ref": "#/$defs/_transport_/fingerprint",
+                        "markdownDescription": "此参数用于配置指定 `TLS Client Hello` 的指纹。当其值为空时，表示不启用此功能。启用后，Xray 将通过 uTLS 库 **模拟** `TLS` 指纹，或随机生成。支持三种配置方式：\n\n1. 常见浏览器最新版本的 TLS 指纹 包括\n\n- `\"chrome\"`\n- `\"firefox\"`\n- `\"safari\"`\n- `\"ios\"`\n- `\"android\"`\n- `\"edge\"`\n- `\"360\"`\n- `\"qq\"`\n\n2. 在 xray 启动时自动生成一个指纹\n\n- `\"random\"`: 在较新版本的浏览器里随机抽取一个\n- `\"randomized\"`: 完全随机生成一个独一无二的指纹 (100% 支持 TLS 1.3 使用 X25519)\n\n3. 使用 uTLS 原生指纹变量名 例如`\"HelloRandomizedNoALPN\"` `\"HelloChrome_106_Shuffle\"`。完整名单见 [uTLS 库](https://github.com/refraction-networking/utls/blob/master/u_common.go#L434)\n\n> **提示**\n> 此功能仅 **模拟** `TLS Client Hello` 的指纹，行为、其他指纹与 Golang 相同。如果你希望更加完整地模拟浏览器 `TLS`\n> 指纹与行为，可以使用 [Browser Dialer](./transports/websocket.md#browser-dialer)。"
+                    },
+                    "pinnedPeerCertificateChainSha256": {
+                        "type": "array",
+                        "markdownDescription": "用于指定远程服务器的证书链 SHA256 散列值，使用标准编码格式。仅有当服务器端证书链散列值符合设置项中之一时才能成功建立 TLS 连接。\n\n在连接因为此配置失败时，会展示远程服务器证书散列值。\n\n> **警告**\n> 不建议使用这种方式获得证书链散列值，因为在这种情况下将没有机会验证此时服务器提供的证书是否为真实证书，进而不保证获得的证书散列值为期望的散列值。\n\n> **提示**\n> 如果需要获得证书的散列值，应在命令行中运行 `xray tls certChainHash --cert <cert.pem>` 来获取，`<cert.pem>` 应替换为实际证书文件路径。",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "certificates": {
+                        "type": "array",
+                        "markdownDescription": "证书列表，其中每一项表示一个证书（建议 fullchain）。\n\n> **提示**\n> 如果要在 ssllibs 或者 myssl 获得 A/A+ 等级的评价,\n> 请参考 [这里](https://github.com/XTLS/Xray-core/discussions/56#discussioncomment-215600).\n\n# CertificateObject\n\n```json\n{\n  \"ocspStapling\": 3600,\n  \"oneTimeLoading\": false,\n  \"usage\": \"encipherment\",\n  \"certificateFile\": \"/path/to/certificate.crt\",\n  \"keyFile\": \"/path/to/key.key\",\n  \"certificate\": [\n    \"--BEGIN CERTIFICATE--\",\n    \"MIICwDCCAaigAwIBAgIRAO16JMdESAuHidFYJAR/7kAwDQYJKoZIhvcNAQELBQAw\",\n    \"ADAeFw0xODA0MTAxMzU1MTdaFw0xODA0MTAxNTU1MTdaMAAwggEiMA0GCSqGSIb3\",\n    \"DQEBAQUAA4IBDwAwggEKAoIBAQCs2PX0fFSCjOemmdm9UbOvcLctF94Ox4BpSfJ+\",\n    \"3lJHwZbvnOFuo56WhQJWrclKoImp/c9veL1J4Bbtam3sW3APkZVEK9UxRQ57HQuw\",\n    \"OzhV0FD20/0YELou85TwnkTw5l9GVCXT02NG+pGlYsFrxesUHpojdl8tIcn113M5\",\n    \"pypgDPVmPeeORRf7nseMC6GhvXYM4txJPyenohwegl8DZ6OE5FkSVR5wFQtAhbON\",\n    \"OAkIVVmw002K2J6pitPuJGOka9PxcCVWhko/W+JCGapcC7O74palwBUuXE1iH+Jp\",\n    \"noPjGp4qE2ognW3WH/sgQ+rvo20eXb9Um1steaYY8xlxgBsXAgMBAAGjNTAzMA4G\",\n    \"A1UdDwEB/wQEAwIFoDATBgNVHSUEDDAKBggrBgEFBQcDATAMBgNVHRMBAf8EAjAA\",\n    \"MA0GCSqGSIb3DQEBCwUAA4IBAQBUd9sGKYemzwPnxtw/vzkV8Q32NILEMlPVqeJU\",\n    \"7UxVgIODBV6A1b3tOUoktuhmgSSaQxjhYbFAVTD+LUglMUCxNbj56luBRlLLQWo+\",\n    \"9BUhC/ow393tLmqKcB59qNcwbZER6XT5POYwcaKM75QVqhCJVHJNb1zSEE7Co7iO\",\n    \"6wIan3lFyjBfYlBEz5vyRWQNIwKfdh5cK1yAu13xGENwmtlSTHiwbjBLXfk+0A/8\",\n    \"r/2s+sCYUkGZHhj8xY7bJ1zg0FRalP5LrqY+r6BckT1QPDIQKYy615j1LpOtwZe/\",\n    \"d4q7MD/dkzRDsch7t2cIjM/PYeMuzh87admSyL6hdtK0Nm/Q\",\n    \"--END CERTIFICATE--\"\n  ],\n  \"key\": [\n    \"--BEGIN RSA PRIVATE KEY--\",\n    \"MIIEowIBAAKCAQEArNj19HxUgoznppnZvVGzr3C3LRfeDseAaUnyft5SR8GW75zh\",\n    \"bqOeloUCVq3JSqCJqf3Pb3i9SeAW7Wpt7FtwD5GVRCvVMUUOex0LsDs4VdBQ9tP9\",\n    \"GBC6LvOU8J5E8OZfRlQl09NjRvqRpWLBa8XrFB6aI3ZfLSHJ9ddzOacqYAz1Zj3n\",\n    \"jkUX+57HjAuhob12DOLcST8np6IcHoJfA2ejhORZElUecBULQIWzjTgJCFVZsNNN\",\n    \"itieqYrT7iRjpGvT8XAlVoZKP1viQhmqXAuzu+KWpcAVLlxNYh/iaZ6D4xqeKhNq\",\n    \"IJ1t1h/7IEPq76NtHl2/VJtbLXmmGPMZcYAbFwIDAQABAoIBAFCgG4phfGIxK9Uw\",\n    \"qrp+o9xQLYGhQnmOYb27OpwnRCYojSlT+mvLcqwvevnHsr9WxyA+PkZ3AYS2PLue\",\n    \"C4xW0pzQgdn8wENtPOX8lHkuBocw1rNsCwDwvIguIuliSjI8o3CAy+xVDFgNhWap\",\n    \"/CMzfQYziB7GlnrM6hH838iiy0dlv4I/HKk+3/YlSYQEvnFokTf7HxbDDmznkJTM\",\n    \"aPKZ5qbnV+4AcQfcLYJ8QE0ViJ8dVZ7RLwIf7+SG0b0bqloti4+oQXqGtiESUwEW\",\n    \"/Wzi7oyCbFJoPsFWp1P5+wD7jAGpAd9lPIwPahdr1wl6VwIx9W0XYjoZn71AEaw4\",\n    \"bK4xUXECgYEA3g2o9WqyrhYSax3pGEdvV2qN0VQhw7Xe+jyy98CELOO2DNbB9QNJ\",\n    \"8cSSU/PjkxQlgbOJc8DEprdMldN5xI/srlsbQWCj72wXxXnVnh991bI2clwt7oYi\",\n    \"pcGZwzCrJyFL+QaZmYzLxkxYl1tCiiuqLm+EkjxCWKTX/kKEFb6rtnMCgYEAx0WR\",\n    \"L8Uue3lXxhXRdBS5QRTBNklkSxtU+2yyXRpvFa7Qam+GghJs5RKfJ9lTvjfM/PxG\",\n    \"3vhuBliWQOKQbm1ZGLbgGBM505EOP7DikUmH/kzKxIeRo4l64mioKdDwK/4CZtS7\",\n    \"az0Lq3eS6bq11qL4mEdE6Gn/Y+sqB83GHZYju80CgYABFm4KbbBcW+1RKv9WSBtK\",\n    \"gVIagV/89moWLa/uuLmtApyEqZSfn5mAHqdc0+f8c2/Pl9KHh50u99zfKv8AsHfH\",\n    \"TtjuVAvZg10GcZdTQ/I41ruficYL0gpfZ3haVWWxNl+J47di4iapXPxeGWtVA+u8\",\n    \"eH1cvgDRMFWCgE7nUFzE8wKBgGndUomfZtdgGrp4ouLZk6W4ogD2MpsYNSixkXyW\",\n    \"64cIbV7uSvZVVZbJMtaXxb6bpIKOgBQ6xTEH5SMpenPAEgJoPVts816rhHdfwK5Q\",\n    \"8zetklegckYAZtFbqmM0xjOI6bu5rqwFLWr1xo33jF0wDYPQ8RHMJkruB1FIB8V2\",\n    \"GxvNAoGBAM4g2z8NTPMqX+8IBGkGgqmcYuRQxd3cs7LOSEjF9hPy1it2ZFe/yUKq\",\n    \"ePa2E8osffK5LBkFzhyQb0WrGC9ijM9E6rv10gyuNjlwXdFJcdqVamxwPUBtxRJR\",\n    \"cYTY2HRkJXDdtT0Bkc3josE6UUDvwMpO0CfAETQPto1tjNEDhQhT\",\n    \"--END RSA PRIVATE KEY--\"\n  ]\n}\n```",
+                        "items": {
+                            "$ref": "#/$defs/_transport_/CertificateObject"
+                        }
+                    }
+                }
+            },
+            "RealityObject": {
+                "type": "object",
+                "properties": {
+                    "show": {
+                        "type": "boolean",
+                        "markdownDescription": "当值为 `true` 时，输出调试信息。"
+                    },
+                    "dest": {
+                        "type": "string",
+                        "markdownDescription": "**入站配置**\n\n必填，格式同 VLESS `fallbacks` 的 [dest](https://xtls.github.io/config/features/fallback.html#fallbackobject)。"
+                    },
+                    "xver": {
+                        "type": "number",
+                        "markdownDescription": "**入站配置**\n\n选填，格式同 VLESS `fallbacks` 的 [xver](https://xtls.github.io/config/features/fallback.html#fallbackobject)"
+                    },
+                    "serverNames": {
+                        "type": "array",
+                        "markdownDescription": "**入站配置**\n\n必填，客户端可用的 `serverName` 列表，暂不支持 \\* 通配符。",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "privateKey": {
+                        "type": "string",
+                        "markdownDescription": "**入站配置**\n\n必填，执行 `./xray x25519` 生成。"
+                    },
+                    "minClientVer": {
+                        "type": "string",
+                        "markdownDescription": "**入站配置**\n\n选填，客户端 Xray 最低版本，格式为 `x.y.z`。"
+                    },
+                    "maxClientVer": {
+                        "type": "string",
+                        "markdownDescription": "**入站配置**\n\n选填，客户端 Xray 最高版本，格式为 `x.y.z`。"
+                    },
+                    "maxTimeDiff": {
+                        "type": "number",
+                        "markdownDescription": "**入站配置**\n\n选填，允许的最大时间差，单位为毫秒。"
+                    },
+                    "shortIds": {
+                        "type": "array",
+                        "markdownDescription": "**入站配置**\n\n必填，客户端可用的 `shortId` 列表，可用于区分不同的客户端。\n\n0 到 f，长度为 2 的倍数，长度上限为 16。\n\n若包含空值，客户端 `shortId` 可为空。",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "serverName": {
+                        "type": "string",
+                        "markdownDescription": "服务端 serverNames 之一。"
+                    },
+                    "fingerprint": {
+                        "$ref": "#/$defs/_transport_/fingerprint",
+                        "markdownDescription": "必填，同 [TLSObject](https://xtls.github.io/config/transport.html#tlsobject)。"
+                    },
+                    "shortID": {
+                        "type": "string",
+                        "markdownDescription": "服务端 shortIds 之一。\n\n0 到 f，长度为 2 的倍数，长度上限为 16。\n\n若服务端的 `shordIDs` 包含空值，客户端可为空。"
+                    },
+                    "publicKey": {
+                        "type": "string",
+                        "markdownDescription": "必填，服务端私钥对应的公钥。使用 `./xray x25519 -i \"服务器私钥\"` 生成。"
+                    },
+                    "spiderX": {
+                        "type": "string",
+                        "markdownDescription": "爬虫初始路径与参数，建议每个客户端不同。"
+                    }
+                }
+            },
+            "CertificateObject": {
+                "type": "object",
+                "properties": {
+                    "ocspStapling": {
+                        "type": "number",
+                        "markdownDescription": "OCSP 装订更新，与证书热重载的时间间隔。 单位：秒。默认值为 `3600`，即一小时。"
+                    },
+                    "oneTimeLoading": {
+                        "type": "boolean",
+                        "markdownDescription": "仅加载一次。值为 `true` 时将关闭证书热重载功能与 ocspStapling 功能。\n\n> **注意**\n> 当值为 `true` 时，将会关闭 OCSP 装订。"
+                    },
+                    "usage": {
+                        "type": "string",
+                        "markdownDescription": "证书用途，默认值为 `\"encipherment\"`。\n\n- `\"encipherment\"`：证书用于 TLS 认证和加密。\n- `\"verify\"`：证书用于验证远端 TLS 的证书。当使用此项时，当前证书必须为 CA 证书。\n- `\"issue\"`：证书用于签发其它证书。当使用此项时，当前证书必须为 CA 证书。\n\n> **TIP 1**\n> 在 Windows 平台上可以将自签名的 CA 证书安装到系统中，即可验证远端 TLS 的证书。\n> 当有新的客户端请求时，假设所指定的 `serverName` 为 `\"xray.com\"`，Xray 会先从证书列表中寻找可用于 `\"xray.com\"` 的证书，如果没有找到，则使用任一 `usage`\n为 `\"issue\"` 的证书签发一个适用于 `\"xray.com\"` 的证书，有效期为一小时。并将新的证书加入证书列表，以供后续使用。\n\n> **TIP 2**\n> 当有新的客户端请求时，假设所指定的 `serverName` 为 `\"xray.com\"`，Xray 会先从证书列表中寻找可用于 `\"xray.com\"` 的证书，如果没有找到，则使用任一 `usage`\n> 为 `\"issue\"` 的证书签发一个适用于 `\"xray.com\"` 的证书，有效期为一小时。并将新的证书加入证书列表，以供后续使用。\n\n> **TIP 3**\n> 当 `certificateFile` 和 `certificate` 同时指定时，Xray 优先使用 `certificateFile`。`keyFile` 和 `key` 也一样。\n\n> **TIP 4**\n> 当 `usage` 为 `\"verify\"` 时，`keyFile` 和 `key` 可均为空。\n\n> **TIP5**\n> 使用 `xray tls cert` 可以生成自签名的 CA 证书。\n\n> **TIP 6**\n> 如已经拥有一个域名, 可以使用工具便捷的获取免费第三方证书,如[acme.sh](https://github.com/acmesh-official/acme.sh)",
+                        "enum": [
+                            "encipherment",
+                            "verify",
+                            "issue"
+                        ]
+                    },
+                    "certificateFile": {
+                        "type": "string",
+                        "markdownDescription": "证书文件路径，如使用 OpenSSL 生成，后缀名为 .crt。"
+                    },
+                    "certificate": {
+                        "type": "array",
+                        "markdownDescription": "一个字符串数组，表示证书内容，格式如样例所示。`certificate` 和 `certificateFile` 二者选一。",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "keyFile": {
+                        "type": "string",
+                        "markdownDescription": "密钥文件路径，如使用 OpenSSL 生成，后缀名为 .key。目前暂不支持需要密码的 key 文件。"
+                    },
+                    "key": {
+                        "type": "array",
+                        "markdownDescription": "一个字符串数组，表示密钥内容，格式如样例如示。`key` 和 `keyFile` 二者选一。",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "TcpObject": {
+                "type": "object",
+                "properties": {
+                    "acceptProxyProtocol": {
+                        "type": "boolean",
+                        "markdownDescription": "仅用于 inbound，指示是否接收 PROXY protocol。\n\n[PROXY protocol](https://www.haproxy.org/download/2.2/doc/proxy-protocol.txt) 专用于传递请求的真实来源 IP 和端口，**若你不了解它，请先忽略该项**。\n\n常见的反代软件（如 HAProxy、Nginx）都可以配置发送它，VLESS fallbacks xver 也可以发送它。\n\n填写 `true` 时，最底层 TCP 连接建立后，请求方必须先发送 PROXY protocol v1 或 v2，否则连接会被关闭。\n\n默认值为 `false`。"
+                    },
+                    "header": {
+                        "$ref": "#/$defs/_transport_/_tcp_/header",
+                        "markdownDescription": "数据包头部伪装设置，默认值为 `NoneHeaderObject`。\n\n> **提示**\n> HTTP 伪装无法被其它 HTTP 服务器（如 Nginx）分流，但可以被 VLESS fallbacks path 分流。\n\n# NoneHeaderObject\n\n不进行伪装\n\n```json\n{\n  \"type\": \"none\"\n}\n```\n\n# HttpHeaderObject\n\nHTTP 伪装配置必须在对应的入站出站连接上同时配置，且内容必须一致。\n\n```json\n{\n  \"type\": \"http\",\n  \"request\": {},\n  \"response\": {}\n}\n```"
+                    }
+                }
+            },
+            "_tcp_": {
+                "header": {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "markdownDescription": "\"`none`\"：指定不进行伪装\n\n\"`http`\"：指定进行 HTTP 伪装",
+                            "enum": [
+                                "none",
+                                "http"
+                            ]
+                        },
+                        "request": {
+                            "$ref": "#/$defs/_transport_/_tcp_/HTTPRequestObject",
+                            "markdownDescription": "HTTP 请求\n\n# HTTPRequestObject\n\n```json\n{\n  \"version\": \"1.1\",\n  \"method\": \"GET\",\n  \"path\": [\"/\"],\n  \"headers\": {\n    \"Host\": [\"www.baidu.com\", \"www.bing.com\"],\n    \"User-Agent\": [\n      \"Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.143 Safari/537.36\",\n      \"Mozilla/5.0 (iPhone; CPU iPhone OS 10_0_2 like Mac OS X) AppleWebKit/601.1 (KHTML, like Gecko) CriOS/53.0.2785.109 Mobile/14A456 Safari/601.1.46\"\n    ],\n    \"Accept-Encoding\": [\"gzip, deflate\"],\n    \"Connection\": [\"keep-alive\"],\n    \"Pragma\": \"no-cache\"\n  }\n}\n```"
+                        },
+                        "response": {
+                            "$ref": "#/$defs/_transport_/_tcp_/HTTPResponseObject",
+                            "markdownDescription": "HTTP 响应\n\n# HTTPResponseObject\n\n```json\n{\n  \"version\": \"1.1\",\n  \"status\": \"200\",\n  \"reason\": \"OK\",\n  \"headers\": {\n    \"Content-Type\": [\"application/octet-stream\", \"video/mpeg\"],\n    \"Transfer-Encoding\": [\"chunked\"],\n    \"Connection\": [\"keep-alive\"],\n    \"Pragma\": \"no-cache\"\n  }\n}\n```"
+                        }
+                    }
+                },
+                "HTTPRequestObject": {
+                    "type": "object",
+                    "properties": {
+                        "version": {
+                            "type": "string",
+                            "markdownDescription": "HTTP 版本，默认值为 `\"1.1\"`。"
+                        },
+                        "method": {
+                            "type": "string",
+                            "markdownDescription": "HTTP 方法，默认值为 `\"GET\"`。",
+                            "enum": [
+                                "GET",
+                                "HEAD",
+                                "POST",
+                                "PUT",
+                                "DELETE",
+                                "CONNECT",
+                                "OPTIONS",
+                                "TRACE",
+                                "PATCH"
+                            ]
+                        },
+                        "path": {
+                            "type": "array",
+                            "markdownDescription": "路径，一个字符串数组。默认值为 `[\"/\"]`。当有多个值时，每次请求随机选择一个值。",
+                            "items": {
+                                "type": "string"
+                            }
+                        },
+                        "headers": {
+                            "type": "object",
+                            "markdownDescription": "HTTP 头，一个键值对，每个键表示一个 HTTP 头的名称，对应的值是一个数组。\n\n每次请求会附上所有的键，并随机选择一个对应的值。默认值见上方示例。",
+                            "patternProperties": {
+                                ".*": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "HTTPResponseObject": {
+                    "type": "object",
+                    "properties": {
+                        "version": {
+                            "type": "string",
+                            "markdownDescription": "HTTP 版本，默认值为 `\"1.1\"`。"
+                        },
+                        "status": {
+                            "type": "string",
+                            "markdownDescription": "HTTP 状态，默认值为 `\"200\"`。"
+                        },
+                        "reason": {
+                            "type": "string",
+                            "markdownDescription": "HTTP 状态说明，默认值为 `\"OK\"`。"
+                        },
+                        "headers": {
+                            "type": "object",
+                            "markdownDescription": "HTTP 头，一个键值对，每个键表示一个 HTTP 头的名称，对应的值是一个数组。\n\n每次请求会附上所有的键，并随机选择一个对应的值。默认值见上方示例。",
+                            "patternProperties": {
+                                ".*": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "KcpObject": {
+                "type": "object",
+                "properties": {
+                    "mtu": {
+                        "type": "number",
+                        "markdownDescription": "最大传输单元（maximum transmission unit）\n请选择一个介于 576 - 1460 之间的值。\n\n默认值为 `1350`。",
+                        "minimum": 576,
+                        "maximum": 1460
+                    },
+                    "tti": {
+                        "type": "number",
+                        "markdownDescription": "传输时间间隔（transmission time interval），单位毫秒（ms），mKCP 将以这个时间频率发送数据。\n请选译一个介于 10 - 100 之间的值。\n\n默认值为 `50`。"
+                    },
+                    "uplinkCapacity": {
+                        "type": "number",
+                        "markdownDescription": "上行链路容量，即主机发出数据所用的最大带宽，单位 MB/s，注意是 Byte 而非 bit。\n可以设置为 0，表示一个非常小的带宽。\n\n默认值 `5`。"
+                    },
+                    "downlinkCapacity": {
+                        "type": "number",
+                        "markdownDescription": "下行链路容量，即主机接收数据所用的最大带宽，单位 MB/s，注意是 Byte 而非 bit。\n可以设置为 0，表示一个非常小的带宽。\n\n默认值 `20`。\n\n> **提示**\n> `uplinkCapacity` 和 `downlinkCapacity` 决定了 mKCP 的传输速度。\n> 以客户端发送数据为例，客户端的 `uplinkCapacity` 指定了发送数据的速度，而服务器端的 `downlinkCapacity` 指定了接收数据的速度。两者的值以较小的一个为准。\n>\n> 推荐把 `downlinkCapacity` 设置为一个较大的值，比如 100，而 `uplinkCapacity` 设为实际的网络速度。当速度不够时，可以逐渐增加 `uplinkCapacity` 的值，直到带宽的两倍左右。"
+                    },
+                    "congestion": {
+                        "type": "boolean",
+                        "markdownDescription": "是否启用拥塞控制。\n\n开启拥塞控制之后，Xray 会自动监测网络质量，当丢包严重时，会自动降低吞吐量；当网络畅通时，也会适当增加吞吐量。\n\n默认值为 `false`"
+                    },
+                    "readBufferSize": {
+                        "type": "number",
+                        "markdownDescription": "单个连接的读取缓冲区大小，单位是 MB。\n\n默认值为 `2`。"
+                    },
+                    "writeBufferSize": {
+                        "type": "number",
+                        "markdownDescription": "单个连接的写入缓冲区大小，单位是 MB。\n\n默认值为 `2`。\n\n> **提示**\n> `readBufferSize` 和 `writeBufferSize` 指定了单个连接所使用的内存大小。\n> 在需要高速传输时，指定较大的 `readBufferSize` 和 `writeBufferSize` 会在一定程度上提高速度，但也会使用更多的内存。\n>\n> 在网速不超过 20MB/s 时，默认值 1MB 可以满足需求；超过之后，可以适当增加 `readBufferSize` 和 `writeBufferSize` 的值，然后手动平衡速度和内存的关系。"
+                    },
+                    "header": {
+                        "$ref": "#/$defs/_transport_/_kcp_/HeaderObject",
+                        "markdownDescription": "数据包头部伪装设置\n\n# HeaderObject\n\n```json\n{\n  \"type\": \"none\"\n}\n```"
+                    }
+                }
+            },
+            "_kcp_": {
+                "HeaderObject": {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "markdownDescription": "伪装类型，可选的值有：\n\n- `\"none\"`：默认值，不进行伪装，发送的数据是没有特征的数据包。\n- `\"srtp\"`：伪装成 SRTP 数据包，会被识别为视频通话数据（如 FaceTime）。\n- `\"utp\"`：伪装成 uTP 数据包，会被识别为 BT 下载数据。\n- `\"wechat-video\"`：伪装成微信视频通话的数据包。\n- `\"dtls\"`：伪装成 DTLS 1.2 数据包。\n- `\"wireguard\"`：伪装成 WireGuard 数据包。（并不是真正的 WireGuard 协议）",
+                            "enum": [
+                                "none",
+                                "srtp",
+                                "utp",
+                                "wechat-video",
+                                "dtls",
+                                "wireguard"
+                            ]
+                        }
+                    }
+                }
+            },
+            "WebSocketObject": {
+                "type": "object",
+                "properties": {
+                    "acceptProxyProtocol": {
+                        "type": "boolean",
+                        "markdownDescription": "仅用于 inbound，指示是否接收 PROXY protocol。\n\n[PROXY protocol](https://www.haproxy.org/download/2.2/doc/proxy-protocol.txt) 专用于传递请求的真实来源 IP 和端口，**若你不了解它，请先忽略该项**。\n\n常见的反代软件（如 HAProxy、Nginx）都可以配置发送它，VLESS fallbacks xver 也可以发送它。\n\n填写 `true` 时，最底层 TCP 连接建立后，请求方必须先发送 PROXY protocol v1 或 v2，否则连接会被关闭。"
+                    },
+                    "path": {
+                        "type": "string",
+                        "markdownDescription": "WebSocket 所使用的 HTTP 协议路径，默认值为 `\"/\"`。\n\n如果路径中包含 `ed` 参数，将会启用 `Early Data` 以降低延迟，其值为首包长度阈值。如果首包长度超过此值，就不会启用 `Early Data`。建议的值为 2048。\n\n> **注意**\n> `Early Data` 使用 `Sec-WebSocket-Protocol` 头承载数据。如果你遇到兼容性问题，可以尝试调低阈值。"
+                    },
+                    "headers": {
+                        "type": "object",
+                        "markdownDescription": "自定义 HTTP 头，一个键值对，每个键表示一个 HTTP 头的名称，对应的值是字符串。\n\n默认值为空。",
+                        "patternProperties": {
+                            ".*": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "HttpObject": {
+                "type": "object",
+                "properties": {
+                    "host": {
+                        "type": "array",
+                        "markdownDescription": "一个字符串数组，每一个元素是一个域名。\n\n客户端会随机从列表中选出一个域名进行通信，服务器会验证域名是否在列表中。",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "path": {
+                        "type": "string",
+                        "markdownDescription": "HTTP 路径，由 `/` 开头, 客户端和服务器必须一致。\n\n默认值为 `\"/\"`。"
+                    },
+                    "read_idle_timeout": {
+                        "type": "number",
+                        "markdownDescription": "单位秒，当这段时间内没有接收到数据时，将会进行健康检查。\n\n健康检查默认**不启用**。\n\n> **提示**\n> **只需**在**出站**（**客户端**）配置。\n>\n\n> **提示**\n> 可能会解决一些“断流”问题。"
+                    },
+                    "health_check_timeout": {
+                        "type": "number",
+                        "markdownDescription": "单位秒，健康检查的超时时间。如果在这段时间内没有完成健康检查，即认为健康检查失败。默认值为 `15`。\n\n> **提示**\n> **只需**在**出站**（**客户端**）配置。"
+                    },
+                    "method": {
+                        "type": "string",
+                        "markdownDescription": "HTTP 方法。默认值为 `\"PUT\"`。\n\n设置时应参照[此处](https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods)列出值。",
+                        "enum": [
+                            "GET",
+                            "HEAD",
+                            "POST",
+                            "PUT",
+                            "DELETE",
+                            "CONNECT",
+                            "OPTIONS",
+                            "TRACE",
+                            "PATCH"
+                        ]
+                    },
+                    "headers": {
+                        "type": "object",
+                        "markdownDescription": "自定义 HTTP 头，一个键值对，每个键表示一个 HTTP 头名称，对应值为一个数组。",
+                        "patternProperties": {
+                            ".*": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "QUICObject": {
+                "type": "object",
+                "properties": {
+                    "security": {
+                        "type": "string",
+                        "markdownDescription": "加密方式。\n\n此加密是对 QUIC 数据包的加密，加密后数据包无法被探测。\n\n默认值为不加密。",
+                        "enum": [
+                            "none",
+                            "aes-128-gcm",
+                            "chacha20-poly1305"
+                        ]
+                    },
+                    "key": {
+                        "type": "string",
+                        "markdownDescription": "加密时所用的密钥。\n\n可以是任意字符串。当 `security` 不为 `\"none\"` 时有效。"
+                    },
+                    "header": {
+                        "$ref": "#/$defs/_transport_/_quic_/HeaderObject",
+                        "markdownDescription": "数据包头部伪装设置\n\n# HeaderObject\n\n```json\n{\n  \"type\": \"none\"\n}\n```"
+                    }
+                }
+            },
+            "_quic_": {
+                "HeaderObject": {
+                    "type": "object",
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "markdownDescription": "伪装类型，可选的值有：\n\n- `\"none\"`：默认值，不进行伪装，发送的数据是没有特征的数据包。\n- `\"srtp\"`：伪装成 SRTP 数据包，会被识别为视频通话数据（如 FaceTime）。\n- `\"utp\"`：伪装成 uTP 数据包，会被识别为 BT 下载数据。\n- `\"wechat-video\"`：伪装成微信视频通话的数据包。\n- `\"dtls\"`：伪装成 DTLS 1.2 数据包。\n- `\"wireguard\"`：伪装成 WireGuard 数据包。（并不是真正的 WireGuard 协议）\n\n> **提示**\n> 当加密和伪装都不启用时，数据包即为原始的 QUIC 数据包，可以与其它的 QUIC 工具对接。\n> 为了避免被探测，建议加密或伪装至少开启一项。",
+                            "enum": [
+                                "none",
+                                "srtp",
+                                "utp",
+                                "wechat-video",
+                                "dtls",
+                                "wireguard"
+                            ]
+                        }
+                    }
+                }
+            },
+            "GRPCObject": {
+                "type": "object",
+                "properties": {
+                    "serviceName": {
+                        "type": "string",
+                        "markdownDescription": "一个字符串，指定服务名称，**类似于** HTTP/2 中的 Path。\n客户端会使用此名称进行通信，服务端会验证服务名称是否匹配。"
+                    },
+                    "user_agent": {
+                        "type": "string",
+                        "markdownDescription": "> **提示**\n> **只需**在**出站**（**客户端**）配置。\n\n设置 gRPC 的用户代理，可能能防止某些 CDN 阻止 gRPC 流量。"
+                    },
+                    "multiMode": {
+                        "type": "boolean",
+                        "markdownDescription": "`true` 启用 `multiMode`，默认值为： `false`。\n\n这是一个 **实验性** 选项，可能不会被长期保留，也不保证跨版本兼容。此模式在 **测试环境中** 能够带来约 20% 的性能提升，实际效果因传输速率不同而不同。\n\n> **提示**\n> **只需**在**出站**（**客户端**）配置。"
+                    },
+                    "idle_timeout": {
+                        "type": "number",
+                        "markdownDescription": "单位秒，当这段时间内没有数据传输时，将会进行健康检查。如果此值设置为 `10` 以下，将会使用 `10`，即最小值。\n\n> **提示**\n> 如果没有使用 Caddy 或 Nginx 等反向代理工具（**通常不会**），设为 `60` 以下，服务端可能发送意外的 h2 GOAWAY 帧以关闭现有连接。\n\n健康检查默认**不启用**。\n\n> **提示**\n> **只需**在**出站**（**客户端**）配置。\n\n> **提示**\n> 可能会解决一些“断流”问题。"
+                    },
+                    "health_check_timeout": {
+                        "type": "number",
+                        "markdownDescription": "单位秒，健康检查的超时时间。如果在这段时间内没有完成健康检查，且仍然没有数据传输时，即认为健康检查失败。默认值为 `20`。\n\n> **提示**\n> **只需**在**出站**（**客户端**）配置。"
+                    },
+                    "permit_without_stream": {
+                        "type": "boolean",
+                        "markdownDescription": "`true` 允许在没有子连接时进行健康检查。默认值为 `false`。\n\n> **提示**\n> **只需**在**出站**（**客户端**）配置。"
+                    },
+                    "initial_windows_size": {
+                        "type": "number",
+                        "markdownDescription": "h2 Stream 初始窗口大小。当值小于等于 `0` 时，此功能不生效。当值大于 `65535` 时，动态窗口机制（Dynamic Window）会被禁用。默认值为 `0`，即不生效。\n\n> **提示**\n> **只需**在**出站**（**客户端**）配置。\n\n> **提示**\n> 通过 Cloudflare CDN 时，可将值设为 `65536` 及以上，即禁用动态窗口机制（Dynamic Window），可防止 Cloudflare CDN 发送意外的 h2 GOAWAY 帧以关闭现有连接。"
+                    }
+                }
+            },
+            "DomainSocketObject": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "markdownDescription": "一个合法的文件路径。\n\n> **警告**\n> 在运行 Xray 之前，这个文件必须不存在。"
+                    },
+                    "abstract": {
+                        "type": "boolean",
+                        "markdownDescription": "是否为 abstract domain socket，默认值 `false`。"
+                    },
+                    "padding": {
+                        "type": "boolean",
+                        "markdownDescription": "abstract domain socket 是否带 padding，默认值 `false`。"
+                    }
+                }
+            },
+            "SockoptObject": {
+                "type": "object",
+                "properties": {
+                    "mark": {
+                        "type": "number",
+                        "markdownDescription": "一个整数。当其值非零时，在 outbound 连接上以此数值标记 SO_MARK。\n\n- 仅适用于 Linux 系统。\n- 需要 CAP_NET_ADMIN 权限。"
+                    },
+                    "tcpMaxSeg": {
+                        "type": "number",
+                        "markdownDescription": "用于设置 TCP 数据包的最大传输单元。"
+                    },
+                    "tcpFastOpen": {
+                        "markdownDescription": "是否启用 [TCP Fast Open](https://zh.wikipedia.org/wiki/TCP%E5%BF%AB%E9%80%9F%E6%89%93%E5%BC%80)。\n\n当其值为 `true` 或`正整数`时，启用 TFO；当其值为 `false` 或`负数`时，强制关闭 TFO；当此项不存在或为 `0` 时，使用系统默认设置。 可用于 inbound/outbound。\n\n- 仅在以下版本（或更新版本）的操作系统中可用:\n\n  - Windows 10 (1607)\n  - Mac OS 10.11 / iOS 9\n  - Linux 3.16：需要通过内核参数 `net.ipv4.tcp_fastopen` 进行设定，此参数是一个 bitmap，`0x1` 代表客户端允许启用，`0x2` 代表服务器允许启用；默认值为 `0x1`，如果服务器要启用\n    TFO，请把此内核参数值设为 `0x3`。\n  - FreeBSD 10.3 (Server) / 12.0 (Client)：需要把内核参数 `net.inet.tcp.fastopen.server_enabled`\n    以及 `net.inet.tcp.fastopen.client_enabled` 设为 `1`。\n\n- 对于 Inbound，此处所设定的`正整数`代表 [待处理的 TFO 连接请求数上限](https://tools.ietf.org/html/rfc7413#section-5.1) ，**注意并非所有操作系统都支持在此设定**：\n\n  - Linux / FreeBSD：此处的设定的`正整数`值代表上限，可接受的最大值为 2147483647，为 `true` 时将取 `256`；注意在 Linux，`net.core.somaxconn`\n    会限制此值的上限，如果超过了 `somaxconn`，请同时提高 `somaxconn`。\n  - Mac OS：此处为 `true` 或`正整数`时，仅代表启用 TFO，上限需要通过内核参数 `net.inet.tcp.fastopen_backlog` 单独设定。\n  - Windows：此处为 `true` 或`正整数`时，仅代表启用 TFO。\n\n- 对于 Outbound，设定为 `true` 或`正整数`在任何操作系统都仅表示启用 TFO。",
+                        "oneOf": [
+                            {
+                                "type": "boolean"
+                            },
+                            {
+                                "type": "number"
+                            }
+                        ]
+                    },
+                    "tproxy": {
+                        "type": "string",
+                        "markdownDescription": "是否开启透明代理（仅适用于 Linux）。\n\n- `\"redirect\"`：使用 Redirect 模式的透明代理。支持所有基于 IPv4/6 的 TCP 和 UDP 连接。\n- `\"tproxy\"`：使用 TProxy 模式的透明代理。支持所有基于 IPv4/6 的 TCP 和 UDP 连接。\n- `\"off\"`：关闭透明代理。\n\n透明代理需要 Root 或 `CAP\\_NET\\_ADMIN` 权限。\n\n> **警告**\n> 当 [Dokodemo-door](https://xtls.github.io/config/inbound.html) 中指定了 `followRedirect`为`true`，且 Sockopt 设置中的`tproxy` 为空时，Sockopt\n> 设置中的`tproxy` 的值会被设为 `\"redirect\"`。",
+                        "enum": [
+                            "redirect",
+                            "tproxy",
+                            "off"
+                        ]
+                    },
+                    "domainStrategy": {
+                        "type": "string",
+                        "markdownDescription": "在之前的版本中，当 Xray 尝试使用域名建立系统连接时，域名的解析由系统完成，不受 Xray\n控制。这导致了在 [非标准 Linux 环境中无法解析域名](https://github.com/v2ray/v2ray-core/issues/1909) 等问题。为此，Xray 1.3.1 为 Sockopt 引入了 Freedom\n中的 domainStrategy，解决了此问题。\n\n在目标地址为域名时, 配置相应的值, SystemDialer 的行为模式如下:\n\n- `\"AsIs\"`: 通过系统 DNS 服务器解析获取 IP, 向此域名发出连接。\n- `\"UseIP\"`、`\"UseIPv4\"` 和 `\"UseIPv6\"`: 使用[内置 DNS 服务器](https://xtls.github.io/config/dns.html)解析获取 IP 后, 直接向此 IP 发出连接。\n\n默认值为 `\"AsIs\"`。\n\n> **警告**\n>\n> 启用了此功能后，不当的配置可能会导致死循环。\n>\n> 一句话版本：连接到服务器，需要等待 DNS 查询结果；完成 DNS 查询，需要连接到服务器。\n>\n> > Tony: 先有鸡还是先有蛋?\n>\n> 详细解释：\n>\n> 1. 触发条件：代理服务器（proxy.com）。内置 DNS 服务器，非 Local 模式。\n> 2. Xray 尝试向 proxy.com 建立 TCP 连接 **前** ，通过内置 DNS 服务器查询 proxy.com。\n> 3. 内置 DNS 服务器向 dns.com 建立连接，并发送查询，以获取 proxy.com 的 IP。\n> 4. **不当的** 的路由规则，导致 proxy.com 代理了步骤 3 中发出的查询。\n> 5. Xray 尝试向 proxy.com 建立另一个 TCP 连接。\n> 6. 在建立连接前，通过内置 DNS 服务器查询 proxy.com。\n> 7. 内置 DNS 服务器复用步骤 3 中的连接，发出查询。\n> 8. 问题出现。步骤 3 中连接的建立，需要等待步骤 7 中的查询结果；步骤 7 完成查询，需要等待步骤 3 中的连接完全建立。\n> 9. Good Game！\n>\n> 解决方案：\n>\n> - 改内置 DNS 服务器的分流。\n> - 用 Hosts。\n> - ~~如果你还是不知道解决方案，就别用这个功能了。~~\n>\n> 因此，**不建议** 经验不足的用户擅自使用此功能。"
+                    },
+                    "dialerProxy": {
+                        "type": "string",
+                        "markdownDescription": "一个出站代理的标识。当值不为空时，将使用指定的 outbound 发出连接。 此选项可用于支持底层传输方式的链式转发。\n\n> **警告**\n> 此选项与 ProxySettingsObject.Tag 不兼容"
+                    },
+                    "acceptProxyProtocol": {
+                        "type": "boolean",
+                        "markdownDescription": "仅用于 inbound，指示是否接收 PROXY protocol。\n\n[PROXY protocol](https://www.haproxy.org/download/2.2/doc/proxy-protocol.txt) 专用于传递请求的真实来源 IP 和端口，**若你不了解它，请先忽略该项**。\n\n常见的反代软件（如 HAProxy、Nginx）都可以配置发送它，VLESS fallbacks xver 也可以发送它。\n\n填写 `true` 时，最底层 TCP 连接建立后，请求方必须先发送 PROXY protocol v1 或 v2，否则连接会被关闭。"
+                    },
+                    "tcpKeepAliveInterval": {
+                        "type": "number",
+                        "markdownDescription": "TCP 保持活跃的数据包发送间隔，单位为秒。~~该设置仅适用于 Linux 下。~~\n\n它是连接不正常（未收到 ack）时候的心跳包。\n\n不配置此项或配置为 0 表示使用 Go 默认值。\n\n> **提示**\n> 填负数时，如 `-1`，不启用 TCP 保持活跃。"
+                    },
+                    "tcpKeepAliveIdle": {
+                        "type": "number",
+                        "markdownDescription": "TCP 空闲时间阈值，单位为秒。当 TCP 连接空闲时间达到这个阈值时，将开始发送 Keep-Alive 探测包。\n\n它是连接正常时候的心跳包。\n\n不配置此项或配置为 0 表示使用 Go 默认值。\n\n> **提示**\n> 填负数时，如 `-1`，不启用 TCP 保持活跃。"
+                    },
+                    "tcpUserTimeout": {
+                        "type": "number"
+                    },
+                    "tcpcongestion": {
+                        "type": "string",
+                        "markdownDescription": "TCP 拥塞控制算法。仅支持 Linux。\n不配置此项表示使用系统默认值。\n\n> **提示**\n> \n> - bbr（推荐）\n> - cubic\n> - reno\n\n> **提示**\n> 执行命令 `sysctl net.ipv4.tcp_congestion_control` 获取系统默认值。",
+                        "enum": [
+                            "bbr",
+                            "cubic",
+                            "reno"
+                        ]
+                    },
+                    "interface": {
+                        "type": "string",
+                        "markdownDescription": "指定绑定出口网卡名称 仅支持 linux。"
+                    }
+                }
+            },
+            "fingerprint": {
+                "type": "string",
+                "enum": [
+                    "chrome",
+                    "firefox",
+                    "safari",
+                    "ios",
+                    "android",
+                    "edge",
+                    "360",
+                    "qq",
+                    "random",
+                    "randomized",
+                    "HelloGolang",
+                    "HelloCustom",
+                    "HelloRandomized",
+                    "HelloRandomizedALPN",
+                    "HelloRandomizedNoALPN",
+                    "HelloFirefox_Auto",
+                    "HelloFirefox_55",
+                    "HelloFirefox_56",
+                    "HelloFirefox_63",
+                    "HelloFirefox_65",
+                    "HelloFirefox_99",
+                    "HelloFirefox_102",
+                    "HelloFirefox_105",
+                    "HelloChrome_Auto",
+                    "HelloChrome_58",
+                    "HelloChrome_62",
+                    "HelloChrome_70",
+                    "HelloChrome_72",
+                    "HelloChrome_83",
+                    "HelloChrome_87",
+                    "HelloChrome_96",
+                    "HelloChrome_100",
+                    "HelloChrome_102",
+                    "HelloChrome_106_Shuffle",
+                    "HelloChrome_100_PSK",
+                    "HelloChrome_112_PSK_Shuf",
+                    "HelloIOS_Auto",
+                    "HelloIOS_11_1",
+                    "HelloIOS_12_1",
+                    "HelloIOS_13",
+                    "HelloIOS_14",
+                    "HelloAndroid_11_OkHttp",
+                    "HelloEdge_Auto",
+                    "HelloEdge_85",
+                    "HelloEdge_106",
+                    "HelloSafari_Auto",
+                    "HelloSafari_16_0",
+                    "Hello360_Auto",
+                    "Hello360_7_5",
+                    "Hello360_11_0",
+                    "HelloQQ_Auto" ,
+                    "HelloQQ_11_1"
+                ]
+            }
+        },
+        "_reverse_": {
+            "BridgeObject": {
+                "type": "object",
+                "properties": {
+                    "tag": {
+                        "type": "string",
+                        "markdownDescription": "所有由 `bridge` 发出的连接，都会带有这个标识。可以在 [路由配置](https://xtls.github.io/config/routing.html) 中使用 `inboundTag` 进行识别。"
+                    },
+                    "domain": {
+                        "type": "string",
+                        "markdownDescription": "指定一个域名，`bridge` 向 `portal` 建立的连接，都会使用这个域名进行发送。\n这个域名只作为 `bridge` 和 `portal` 的通信用途，不必真实存在。"
+                    }
+                }
+            },
+            "PortalObject": {
+                "type": "object",
+                "properties": {
+                    "tag": {
+                        "type": "string",
+                        "markdownDescription": "`portal` 的标识。在 [路由配置](https://xtls.github.io/config/routing.html) 中使用 `outboundTag` 将流量转发到这个 `portal`。"
+                    },
+                    "domain": {
+                        "type": "string",
+                        "markdownDescription": "一个域名。当 `portal` 接收到流量时，如果流量的目标域名是此域名，则 `portal` 认为当前连接上 `bridge` 发来的通信连接。而其它流量则会被当成需要转发的流量。`portal` 所做的工作就是把这两类连接进行识别并拼接。\n\n> **提示**\n> 一个 Xray 既可以作为 `bridge`，也可以作为 `portal`，也可以同时两者，以适用于不同的场景需要。"
+                    }
+                }
+            }
+        },
+        "LogObject": {
+            "type": "object",
+            "markdownDescription": "日志配置，控制 Xray 输出日志的方式.\n\n# 日志配置\n\n日志配置，控制 Xray 输出日志的方式.\n\nXray 有两种日志, 访问日志和错误日志, 你可以分别配置两种日志的输出方式.\n\n# LogObject\n\nLogObject 对应配置文件的 `log` 项。\n\n```json\n{\n  \"log\": {\n    \"access\": \"文件地址\",\n    \"error\": \"文件地址\",\n    \"loglevel\": \"warning\",\n    \"dnsLog\": false\n  }\n}\n```",
+            "properties": {
+                "access": {
+                    "type": "string",
+                    "markdownDescription": "访问日志的文件地址，其值是一个合法的文件地址，如`\"/var/log/Xray/access.log\"`（Linux）或者`\"C:\\Temp\\Xray\\_access.log\"`（Windows）。当此项不指定或为空值时，表示将日志输出至 stdout。\n\n- 特殊值none，即关闭 access log。",
+                    "enum": [
+                        "none"
+                    ]
+                },
+                "error": {
+                    "type": "string",
+                    "markdownDescription": "错误日志的文件地址，其值是一个合法的文件地址，如`\"/var/log/Xray/error.log\"`（Linux）或者`\"C:\\Temp\\Xray\\_error.log\"`（Windows）。当此项不指定或为空值时，表示将日志输出至 stdout。\n\n- 特殊值`none`，即关闭 error log。",
+                    "enum": [
+                        "none"
+                    ]
+                },
+                "loglevel": {
+                    "type": "string",
+                    "markdownDescription": "error 日志的级别, 指示 error 日志需要记录的信息. 默认值为 `\"warning\"`。\n\n- `\"debug\"`：调试程序时用到的输出信息。同时包含所有 `\"info\"` 内容。\n- `\"info\"`：运行时的状态信息等，不影响正常使用。同时包含所有 `\"warning\"` 内容。\n- `\"warning\"`：发生了一些并不影响正常运行的问题时输出的信息，但有可能影响用户的体验。同时包含所有 `\"error\"` 内容。\n`\"error\"`：Xray 遇到了无法正常运行的问题，需要立即解决。\n`\"none\"`：不记录任何内容。",
+                    "enum": [
+                        "debug",
+                        "info",
+                        "warning",
+                        "error",
+                        "none"
+                    ]
+                },
+                "dnsLog": {
+                    "type": "boolean",
+                    "markdownDescription": "是否启用 DNS 查询日志，例如：`DOH//doh.server got answer: domain.com -> [ip1, ip2] 2.333ms`"
+                }
+            }
+        },
+        "ApiObject": {
+            "type": "object",
+            "markdownDescription": "提供了一些 API 接口供远程调用。\n\n# API 接口\n\nAPI 接口配置提供了一些基于 [gRPC](https://grpc.io/)的 API 接口供远程调用。\n\n可以通过 api 配置模块开启接口. 当 api 配置开启时，Xray 会自建一个出站代理，须手动将所有的 API 入站连接通过 [路由规则配置](https://xtls.github.io/config/routing.html) 指向这一出站代理。\n\n请参考本节中的 [相关配置](https://xtls.github.io/config/api.html#%E7%9B%B8%E5%85%B3%E9%85%8D%E7%BD%AE)\n\n> **注意**\n> 大多数用户并不会用到此 API，新手可以直接忽略这一项。\n\n# ApiObject\n\n`ApiObject` 对应配置文件的 `api` 项。\n\n```json\n{\n  \"api\": {\n    \"tag\": \"api\",\n    \"services\": [\"HandlerService\", \"LoggerService\", \"StatsService\"]\n  }\n}\n```",
+            "properties": {
+                "tag": {
+                    "type": "string",
+                    "markdownDescription": "出站代理标识。"
+                },
+                "services": {
+                    "type": "array",
+                    "markdownDescription": "开启的 API 列表，可选的值见 [API 列表](https://xtls.github.io/config/api.html#%E6%94%AF%E6%8C%81%E7%9A%84-api-%E5%88%97%E8%A1%A8)。",
+                    "items": {
+                        "type": "string",
+                        "enum": [
+                            "HandlerService",
+                            "LoggerService",
+                            "StatsService",
+                            "ReflectionService"
+                        ]
+                    },
+                    "uniqueItems": true
+                }
+            }
+        },
+        "DnsObject": {
+            "type": "object",
+            "markdownDescription": "内置的 DNS 服务器. 如果没有配置此项，则使用系统的 DNS 设置。\n\n# 内置 DNS 服务器\n\n# DNS 服务器\n\nXray 内置的 DNS 模块，主要有两大用途：\n\n- 在路由阶段, 解析域名为 IP, 并且根据域名解析得到的 IP 进行规则匹配以分流. 是否解析域名及分流和路由配置模块中 `domainStrategy` 的值有关, 只有在设置以下两种值时,才会使用内置 DNS 服务器进行 DNS 查询:\n\n  - \"IPIfNonMatch\", 请求一个域名时，进行路由里面的 domain 进行匹配，若无法匹配到结果，则对这个域名使用内置 DNS 服务器进行 DNS 查询，并且使用查询返回的 IP 地址再重新进行 IP 路由匹配。\n  - \"IPOnDemand\", 当匹配时碰到任何基于 IP 的规则，将域名立即解析为 IP 进行匹配。\n\n- 解析目标地址进行连接。\n  - 如 在 `freedom` 出站中，将 `domainStrategy` 设置为 `UseIP`, 由此出站发出的请求, 会先将域名通过内置服务器解析成 IP, 然后进行连接。\n  - 如 在 `sockopt` 中，将 `domainStrategy` 设置为 `UseIP`, 此出站发起的系统连接，将先由内置服务器解析为 IP, 然后进行连接。\n\n> **TIP 1**\n>内置 DNS 服务器所发出的 DNS 查询请求，会自动根据路由配置进行转发。\n\n> **TIP 2**\n> 只支持最基本的 IP 查询（A 和 AAAA 记录），CNAME 记录将会重复查询直至返回 A/AAAA 记录为止。其他查询不会进入内置 DNS 服务器。\n\n# DNS 处理流程\n\n若当前要查询的域名：\n\n- 命中了 `hosts` 中的「域名 - IP」、「域名 - IP 数组」映射，则将该 IP 或 IP 数组作为 DNS 解析结果返回。\n- 命中了 `hosts` 中的「域名 - 域名」映射，则该映射的值（另一个域名）将作为当前要查询的域名，进入 DNS 处理流程，直到解析出 IP 后返回，或返回空解析。\n- 没有命中 `hosts`，但命中了某（几）个 DNS 服务器中的 `domains` 域名列表，则按照命中的规则的优先级，依次使用该规则对应的 DNS 服务器进行查询。若命中的 DNS 服务器查询失败或 `expectIPs` 不匹配，则使用下一个命中的 DNS 服务器进行查询；否则返回解析得到的 IP。若所有命中的 DNS 服务器均查询失败或 `expectIPs` 不匹配，此时 DNS 组件：\n  - 默认会进行 「DNS 回退（fallback）查询」：使用「上一轮失败查询中未被使用的、且 `skipFallback` 为默认值 `false` 的 DNS 服务器」依次查询。若查询失败或 `expectIPs` 不匹配，返回空解析；否则返回解析得到的 IP。\n  - 若 `disableFallback` 设置为 `true`，则不会进行「DNS 回退（fallback）查询」。\n- 既没有命中 `hosts`，又没有命中 DNS 服务器中的 `domains` 域名列表，则：\n  - 默认使用「`skipFallback` 为默认值 `false` 的 DNS 服务器」依次查询。若第一个被选中的 DNS 服务器查询失败或 `expectIPs` 不匹配，则使用下一个被选中的 DNS 服务器进行查询；否则返回解析得到的 IP。若所有被选中的 DNS 服务器均查询失败或 `expectIPs` 不匹配，返回空解析。\n  - 若「`skipFallback` 为默认值 `false` 的 DNS 服务器」数量为 0 或 `disableFallback` 设置为 `true`，则使用 DNS 配置中的第一个 DNS 服务器进行查询。查询失败或 `expectIPs` 不匹配，返回空解析；否则返回解析得到的 IP。\n\n# DnsObject\n\n`DnsObject` 对应配置文件的 `dns` 项。\n\n```json\n{\n  \"dns\": {\n    \"hosts\": {\n      \"baidu.com\": \"127.0.0.1\",\n      \"dns.google\": [\"8.8.8.8\", \"8.8.4.4\"]\n    },\n    \"servers\": [\n      \"8.8.8.8\",\n      \"8.8.4.4\",\n      {\n        \"address\": \"1.2.3.4\",\n        \"port\": 5353,\n        \"domains\": [\"domain:xray.com\"],\n        \"expectIPs\": [\"geoip:cn\"],\n        \"skipFallback\": false,\n        \"clientIP\": \"1.2.3.4\"\n      },\n      \"localhost\"\n    ],\n    \"clientIp\": \"1.2.3.4\",\n    \"queryStrategy\": \"UseIP\",\n    \"disableCache\": false,\n    \"disableFallback\": false,\n    \"disableFallbackIfMatch\": false,\n    \"tag\": \"dns_inbound_\"\n  }\n}\n```",
+            "properties": {
+                "hosts": {
+                    "type": "object",
+                    "markdownDescription": "静态 IP 列表，其值为一系列的 \"域名\": \"地址\" 或 \"域名\": [\"地址 1\",\"地址 2\"]。其中地址可以是 IP 或者域名。在解析域名时，如果域名匹配这个列表中的某一项:\n\n- 当该项的地址为 IP 时，则解析结果为该项的 IP\n- 当该项的地址为域名时，会使用此域名进行 IP 解析，而不使用原始域名。\n- 当地址中同时设置了多个 IP 和域名，则只会返回第一个域名，其余 IP 和域名均被忽略。\n\n域名的格式有以下几种形式：\n\n- 纯字符串：当此字符串完整匹配目标域名时，该规则生效。例如 \"xray.com\" 匹配 \"xray.com\"，但不匹配 \"www.xray.com\"。\n- 正则表达式：由 `\"regexp:\"` 开始，余下部分是一个正则表达式。当此正则表达式匹配目标域名时，该规则生效。例如 \"regexp:\\\\\\\\.goo.\\*\\\\\\\\.com\\$\" 匹配 \"www.google.com\"、\"fonts.googleapis.com\"，但不匹配 \"google.com\"。\n- 子域名 (推荐)：由 `\"domain:\"` 开始，余下部分是一个域名。当此域名是目标域名或其子域名时，该规则生效。例如 \"domain:xray.com\" 匹配 \"www.xray.com\" 与 \"xray.com\"，但不匹配 \"wxray.com\"。\n- 子串：由 `\"keyword:\"` 开始，余下部分是一个字符串。当此字符串匹配目标域名中任意部分，该规则生效。比如 \"keyword:sina.com\" 可以匹配 \"sina.com\"、\"sina.com.cn\" 和 \"www.sina.com\"，但不匹配 \"sina.cn\"。\n- 预定义域名列表：由 `\"geosite:\"` 开头，余下部分是一个名称，如 `geosite:google` 或者 `geosite:cn`。名称及域名列表参考 [预定义域名列表](https://xtls.github.io/config/routing.html#%E9%A2%84%E5%AE%9A%E4%B9%89%E5%9F%9F%E5%90%8D%E5%88%97%E8%A1%A8)。",
+                    "oneOf": [
+                        {
+                            "$ref": "#/defs/_common_/map<string, string>"
+                        },
+                        {
+                            "$ref": "#/defs/_common_/map<string, list<string>>"
+                        }
+                    ]
+                },
+                "servers": {
+                    "type": "array",
+                    "markdownDescription": "一个 DNS 服务器列表，支持的类型有两种：DNS 地址（字符串形式）和 [ServerObject](https://xtls.github.io/config/dns.html#serverobject) 。\n\n当值为 `\"localhost\"` 时，表示使用本机预设的 DNS 配置。\n\n当它的值是一个 DNS `\"IP:Port\"` 地址时，如 `\"8.8.8.8:53\"`，Xray 会使用此地址的指定 UDP 端口进行 DNS 查询。该查询遵循路由规则。不指定端口时，默认使用 53 端口。\n\n当值是 `\"tcp://host:port\"` 的形式，如 `\"tcp://8.8.8.8:53\"`，Xray 会使用 `DNS over TCP` 进行查询。该查询遵循路由规则。不指定端口时，默认使用 53 端口。\n\n当值是 `\"tcp+local://host:port\"` 的形式，如 `\"tcp+local://8.8.8.8:53\"`，Xray 会使用 `TCP 本地模式 (TCPL)` 进行查询。即 DNS 请求不会经过路由组件，直接通过 Freedom outbound 对外请求，以降低耗时。不指定端口时，默认使用 53 端口。\n\n当值是 `\"https://host:port/dns-query\"` 的形式，如 `\"https://dns.google/dns-query\"`，Xray 会使用 `DNS over HTTPS` (RFC8484, 简称 DOH) 进行查询。有些服务商拥有 IP 别名的证书，可以直接写 IP 形式，比如 `https://1.1.1.1/dns-query`。也可使用非标准端口和路径，如 `\"https://a.b.c.d:8443/my-dns-query\"`\n\n当值是 `\"https+local://host:port/dns-query\"` 的形式，如 `\"https+local://dns.google/dns-query\"`，Xray 会使用 `DOH 本地模式 (DOHL)` 进行查询，即 DOH 请求不会经过路由组件，直接通过 Freedom outbound 对外请求，以降低耗时。一般适合在服务端使用。也可使用非标端口和路径。\n\n当值是 `\"quic+local://host\"` 的形式，如 `\"quic+local://dns.adguard.com\"`，Xray 会使用 `DNS over QUIC 本地模式 (DOQL)` 进行查询，即 DNS 请求不会经过路由组件，直接通过 Freedom outbound 对外请求。该方式需要 DNS 服务器支持 DNS over QUIC。默认使用 784 端口进行查询，可以使用非标端口。\n\n当值是 `fakedns` 时，将使用 FakeDNS 功能进行查询。\n\n> **TIP 1**\n> 当使用 `localhost` 时，本机的 DNS 请求不受 Xray 控制，需要额外的配置才可以使 DNS 请求由 Xray 转发。\n\n> **TIP 2**\n> 不同规则初始化得到的 DNS 客户端会在 Xray 启动日志中以 `info` 级别体现，比如 `local DOH`、`remote DOH` 和 `udp` 等模式。\n> TIP 3\n> (v1.4.0+) 可以在 [日志](https://xtls.github.io/config/log.html) 中打开 DNS 查询日志。\n\n```json\n{\n  \"address\": \"1.2.3.4\",\n  \"port\": 5353,\n  \"domains\": [\"domain:xray.com\"],\n  \"expectIPs\": [\"geoip:cn\"],\n  \"skipFallback\": false,\n  \"clientIP\": \"1.2.3.4\"\n}\n```",
+                    "items": {
+                        "oneOf": [
+                            {
+                                "$ref": "#/$defs/_dns_/address"
+                            },
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "address": {
+                                        "$ref": "#/$defs/_dns_/address"
+                                    },
+                                    "port": {
+                                        "$ref": "#/defs/_common_/port",
+                                        "markdownDescription": "DNS 服务器端口，如 `53`。此项缺省时默认为 `53`。当使用 DOH、DOHL、DOQL 模式时该项无效，非标端口应在 URL 中指定。"
+                                    },
+                                    "domains": {
+                                        "$ref": "#/$defs/_routing_/_rule/domain",
+                                        "markdownDescription": "一个域名列表，此列表包含的域名，将优先使用此服务器进行查询。域名格式和 [路由配置](https://xtls.github.io/config/routing.html#ruleobject) 中相同。\n\n一个数组，数组每一项是一个域名的匹配。有以下几种形式：\n\n    纯字符串：当此字符串匹配目标域名中任意部分，该规则生效。比如 \"sina.com\" 可以匹配 \"sina.com\"、\"sina.com.cn\" 和 \"www.sina.com\"，但不匹配 \"sina.cn\"。\n    正则表达式：由 \"regexp:\" 开始，余下部分是一个正则表达式。当此正则表达式匹配目标域名时，该规则生效。例如 \"regexp:\\\\.goo.*\\\\.comquot; 匹配 \"www.google.com\" 或 \"fonts.googleapis.com\"，但不匹配 \"google.com\"。\n    子域名（推荐）：由 \"domain:\" 开始，余下部分是一个域名。当此域名是目标域名或其子域名时，该规则生效。例如 \"domain:xray.com\" 匹配 \"www.xray.com\"、\"xray.com\"，但不匹配 \"wxray.com\"。\n    完整匹配：由 \"full:\" 开始，余下部分是一个域名。当此域名完整匹配目标域名时，该规则生效。例如 \"full:xray.com\" 匹配 \"xray.com\" 但不匹配 \"www.xray.com\"。\n    预定义域名列表：由 \"geosite:\" 开头，余下部分是一个名称，如 geosite:google 或者 geosite:cn。名称及域名列表参考 预定义域名列表。\n    从文件中加载域名：形如 \"ext:file:tag\"，必须以 ext:（小写）开头，后面跟文件名和标签，文件存放在 资源目录 中，文件格式与 geosite.dat 相同，标签必须在文件中存在。\n\n> 提示\n> `\"ext:geoip.dat:cn\"` 等价于 `\"geoip:cn\"`"
+                                    },
+                                    "expectIPs": {
+                                        "$ref": "#/$defs/_routing_/_rule/ip",
+                                        "markdownDescription": "一个 IP 范围列表，格式和 [路由配置](https://xtls.github.io/config/routing.html#ruleobject) 中相同。\n\n当配置此项时，Xray DNS 会对返回的 IP 的进行校验，只返回包含 expectIPs 列表中的地址。\n\n如果未配置此项，会原样返回 IP 地址。"
+                                    },
+                                    "skipFallback": {
+                                        "type": "boolean",
+                                        "markdownDescription": "`true`，在进行 DNS fallback 查询时将跳过此服务器, 默认为 `false`，即不跳过。"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "clientIp": {
+                    "type": "string",
+                    "markdownDescription": "用于 DNS 查询时通知服务器以指定 IP 位置。不能是私有地址。\n\n> **TIP 1**\n> 需要 DNS 服务器支持 EDNS Client Subnet。\n\n> **TIP 2**可以在 [DnsObject](https://xtls.github.io/config/dns.html#dnsobject) 为所有 DNS 服务器指定 clientIp, 也可在每个 DNS 服务器配置的 [ServerObject](https://xtls.github.io/config/dns.html#serverobject) 为此 DNS 服务器指定 clientIp （优先级高于 [DnsObject](https://xtls.github.io/config/dns.html#dnsobject) 的配置）。"
+                },
+                "queryStrategy": {
+                    "type": "string",
+                    "markdownDescription": "`UseIPv4` 只查询 A 记录；`UseIPv6` 只查询 AAAA 记录。默认值为 `UseIP`，即查询 A 和 AAAA 记录。",
+                    "enum": [
+                        "UseIP",
+                        "UseIPv4",
+                        "UseIPv6"
+                    ]
+                },
+                "disableCache": {
+                    "type": "boolean",
+                    "markdownDescription": "`true` 禁用 DNS 缓存，默认为 `false`，即不禁用。"
+                },
+                "disableFallback": {
+                    "type": "boolean",
+                    "markdownDescription": "`true` 禁用 DNS 的 fallback 查询，默认为 `false`，即不禁用。"
+                },
+                "disableFallbackIfMatch": {
+                    "type": "boolean",
+                    "markdownDescription": "`true` 当 DNS 服务器的优先匹配域名列表命中时，禁用 fallback 查询，默认为 `false`，即不禁用。"
+                },
+                "tag": {
+                    "type": "string",
+                    "markdownDescription": "由内置 DNS 发出的查询流量，除 `localhost`、`fakedns`、`TCPL`、`DOHL` 和 `DOQL` 模式外，都可以用此标识在路由使用 `inboundTag` 进行匹配。"
+                }
+            }
+        },
+        "RoutingObject": {
+            "type": "object",
+            "markdownDescription": "路由功能模块可以将入站数据按不同规则由不同的出站连接发出，以达到按需代理的目的。\n\n如常见用法是分流国内外流量，Xray 可以通过内部机制判断不同地区的流量，然后将它们发送到不同的出站代理。\n\n有关路由功能更详细的解析：[路由 (routing) 功能简析](https://xtls.github.io/document/level-1/routing-lv1-part1.html)\n\n# RoutingObject\n\n`RoutingObject` 对应配置文件的 `routing` 项。\n\n```json\n{\n  \"routing\": {\n    \"domainStrategy\": \"AsIs\",\n    \"domainMatcher\": \"hybrid\",\n    \"rules\": [],\n    \"balancers\": []\n  }\n}\n```",
+            "properties": {
+                "domainStrategy": {
+                    "type": "string",
+                    "markdownDescription": "域名解析策略，根据不同的设置使用不同的策略。\n\n- `\"AsIs\"`：只使用域名进行路由选择。默认值。\n- `\"IPIfNonMatch\"`：当域名没有匹配任何规则时，将域名解析成 IP（A 记录或 AAAA 记录）再次进行匹配；\n  - 当一个域名有多个 A 记录时，会尝试匹配所有的 A 记录，直到其中一个与某个规则匹配为止；\n  - 解析后的 IP 仅在路由选择时起作用，转发的数据包中依然使用原始域名；\n- `\"IPOnDemand\"`：当匹配时碰到任何基于 IP 的规则，将域名立即解析为 IP 进行匹配；",
+                    "enum": [
+                        "AsIs",
+                        "IPIfNonMatch",
+                        "IPOnDemand"
+                    ]
+                },
+                "domainMatcher": {
+                    "type": "string",
+                    "markdownDescription": "\n域名匹配算法，根据不同的设置使用不同的算法。此处选项会影响所有未单独指定匹配算法的 `RuleObject`。\n\n- `\"hybrid\"`：使用新的域名匹配算法，速度更快且占用更少。默认值。\n- `\"linear\"`：使用原来的域名匹配算法。",
+                    "enum": [
+                        "hybrid",
+                        "linear"
+                    ]
+                },
+                "rules": {
+                    "type": "array",
+                    "markdownDescription": "对应一个数组，数组中每一项是一个规则。\n\n对于每一个连接，路由将根据这些规则从上到下依次进行判断，当遇到第一个生效规则时，即将这个连接转发至它所指定的 `outboundTag`或 `balancerTag`。\n\n> **提示**\n> 当没有匹配到任何规则时，流量默认由第一个 outbound 发出。",
+                    "items": {
+                        "$ref": "#/$defs/_routing_/_rule/RuleObject"
+                    }
+                },
+                "balancers": {
+                    "type": "array",
+                    "markdownDescription": "一个数组，数组中每一项是一个负载均衡器的配置。\n\n当一个规则指向一个负载均衡器时，Xray 会通过此负载均衡器选出一个 outbound, 然后由它转发流量。",
+                    "items": {
+                        "$ref": "#/$defs/_routing_/BalancerObject"
+                    }
+                }
+            }
+        },
+        "PolicyObject": {
+            "type": "object",
+            "markdownDescription": "本地策略，可以设置不同的用户等级和对应的策略设置，比如连接超时设置。Xray 处理的每一个连接都对应一个用户，按照用户的等级（level）应用不同的策略。\n\n# PolicyObject\n\n`PolicyObject` 对应配置文件的 `policy` 项。\n\n```json\n{\n  \"policy\": {\n    \"levels\": {\n      \"0\": {\n        \"handshake\": 4,\n        \"connIdle\": 300,\n        \"uplinkOnly\": 2,\n        \"downlinkOnly\": 5,\n        \"statsUserUplink\": false,\n        \"statsUserDownlink\": false,\n        \"bufferSize\": 4\n      }\n    },\n    \"system\": {\n      \"statsInboundUplink\": false,\n      \"statsInboundDownlink\": false,\n      \"statsOutboundUplink\": false,\n      \"statsOutboundDownlink\": false\n    }\n  }\n}\n```",
+            "properties": {
+                "level": {
+                    "type": "object",
+                    "markdownDescription": "一组键值对，每个键是一个字符串形式的数字（JSON 的要求），比如 `\"0\"`、`\"1\"` 等，双引号不能省略，此数字对应用户等级。每一个值是一个 [LevelPolicyObject]([#levelpolicyobject](https://xtls.github.io/config/policy.html#levelpolicyobject)).\n\n> **提示**> 每个入站出站代理现在都可以设置用户等级，Xray 会根据实际的用户等级应用不同的本地策略。",
+                    "patternProperties": {
+                        "[0-9]+": {
+                            "$ref": "#/$defs/_policy_/LevelPolicyObject"
+                        }
+                    }
+                },
+                "system": {
+                    "$ref": "#/$defs/_policy_/SystemPolicyObject"
+                }
+            }
+        },
+        "InboundObject": {
+            "type": "object",
+            "properties": {
+                "listen": {
+                    "type": "string",
+                    "markdownDescription": "监听地址，IP 地址或 Unix domain socket，默认值为 `\"0.0.0.0\"`，表示接收所有网卡上的连接.\n\n可以指定一个系统可用的 IP 地址。\n\n支持填写 Unix domain socket，格式为绝对路径，形如 `\"/dev/shm/domain.socket\"`，可在开头加 `@` 代表 [abstract](https://www.man7.org/linux/man-pages/man7/unix.7.html)，`@@` 则代表带 padding 的 abstract。\n\n填写 Unix domain socket 时，`port` 和 `allocate` 将被忽略，协议目前可选 VLESS、VMess、Trojan，传输方式可选 TCP、WebSocket、HTTP/2、gRPC。\n\n填写 Unix domain socket 时，填写为形如 `\"/dev/shm/domain.socket,0666\"` 的形式，即 socket 后加逗号及访问权限指示符，即可指定 socket 的访问权限，可用于解决默认情况下出现的 socket 访问权限问题。"
+                },
+                "port": {
+                    "markdownDescription": "端口。接受的格式如下:\n\n- 整型数值：实际的端口号。\n- 环境变量：以 `\"env:\"` 开头，后面是一个环境变量的名称，如 `\"env:PORT\"`。Xray 会以字符串形式解析这个环境变量。\n- 字符串：可以是一个数值类型的字符串，如 `\"1234\"`；或者一个数值范围，如 `\"5-10\"` 表示端口 5 到端口 10，这 6 个端口。可以使用逗号进行分段，如 `11,13,15-17` 表示端口 11、端口 13、端口 15 到端口 17 这 5 个端口。\n\n当只有一个端口时，Xray 会在此端口监听入站连接。当指定了一个端口范围时，取决于 `allocate` 设置。",
+                    "oneOf": [
+                        {
+                            "$ref": "#/$defs/_common_/port"
+                        },
+                        {
+                            "type": "string",
+                            "enum": [
+                                "env:"
+                            ]
+                        }
+                    ]
+                },
+                "protocol": {
+                    "type": "string",
+                    "markdownDescription": "连接协议名称，可选的协议类型见 [入站协议](https://xtls.github.io/config/inbounds/)。",
+                    "enum": [
+                        "dokodemo-door",
+                        "http",
+                        "shadowsocks",
+                        "socks",
+                        "trojan",
+                        "vless",
+                        "vmess"
+                    ]
+                },
+                "settings": {
+                    "markdownDescription": "具体的配置内容，视协议不同而不同。详见每个协议中的 `InboundConfigurationObject`。",
+                    "oneOf": [
+                        {
+                            "$ref": "#/$defs/_inbound_/dokodemo"
+                        },
+                        {
+                            "$ref": "#/$defs/_inbound_/http"
+                        },
+                        {
+                            "$ref": "#/$defs/_inbound_/shadowsocks"
+                        },
+                        {
+                            "$ref": "#/$defs/_inbound_/socks"
+                        },
+                        {
+                            "$ref": "#/$defs/_inbound_/trojan"
+                        },
+                        {
+                            "$ref": "#/$defs/_inbound_/vless"
+                        },
+                        {
+                            "$ref": "#/$defs/_inbound_/vmess"
+                        }
+                    ]
+                },
+                "streamSettings": {
+                    "$ref": "#/$defs/_transport_/StreamSettingsObject",
+                    "markdownDescription": "`StreamSettingsObject` 对应入站或出站中的 `streamSettings` 项。每一个入站或出站都可以分别配置不同的传输配置，都可以设置 `streamSettings` 来进行一些传输的配置。\n\n```json\n{\n  \"network\": \"tcp\",\n  \"security\": \"none\",\n  \"tlsSettings\": {},\n  \"tcpSettings\": {},\n  \"kcpSettings\": {},\n  \"wsSettings\": {},\n  \"httpSettings\": {},\n  \"quicSettings\": {},\n  \"dsSettings\": {},\n  \"grpcSettings\": {},\n  \"sockopt\": {\n    \"mark\": 0,\n    \"tcpFastOpen\": false,\n    \"tproxy\": \"off\",\n    \"domainStrategy\": \"AsIs\",\n    \"dialerProxy\": \"\",\n    \"acceptProxyProtocol\": false,\n    \"tcpKeepAliveInterval\": 0\n  }\n}\n```"
+                }
+            }
+        },
+        "OutboundObject": {
+            "type": "object",
+            "properties": {
+                "sendThrough": {
+                    "type": "string",
+                    "markdownDescription": "用于发送数据的 IP 地址，当主机有多个 IP 地址时有效，默认值为 `\"0.0.0.0\"`。"
+                },
+                "protocol": {
+                    "type": "string",
+                    "markdownDescription": "连接协议名称，可选的协议类型见 [出站协议](https://xtls.github.io/config/outbounds/)。"
+                },
+                "settings": {
+                    "markdownDescription": "具体的配置内容，视协议不同而不同。详见每个协议中的 `OutboundConfigurationObject`。",
+                    "oneOf": [
+                        {
+                            "$ref": "#/$defs/_outbound_/blackhole"
+                        },
+                        {
+                            "$ref": "#/$defs/_outbound_/dns"
+                        },
+                        {
+                            "$ref": "#/$defs/_outbound_/freedom"
+                        },
+                        {
+                            "$ref": "#/$defs/_outbound_/http"
+                        },
+                        {
+                            "$ref": "#/$defs/_outbound_/shadowsocks"
+                        },
+                        {
+                            "$ref": "#/$defs/_outbound_/socks"
+                        },
+                        {
+                            "$ref": "#/$defs/_outbound_/trojan"
+                        },
+                        {
+                            "$ref": "#/$defs/_outbound_/vless"
+                        },
+                        {
+                            "$ref": "#/$defs/_outbound_/vmess"
+                        },
+                        {
+                            "$ref": "#/$defs/_outbound_/wireguard"
+                        }
+                    ]
+                },
+                "streamSettings": {
+                    "$ref": "#/$defs/_transport_/StreamSettingsObject",
+                    "markdownDescription": "底层传输方式（transport）是当前 Xray 节点和其它节点对接的方式"
+                },
+                "proxySettings": {
+                    "type": "object",
+                    "markdownDescription": "出站代理配置。当出站代理生效时，此 outbound 的 `streamSettings` 将不起作用。",
+                    "properties": {
+                        "tag": {
+                            "type": "string",
+                            "markdownDescription": "当指定另一个 outbound 的标识时，此 outbound 发出的数据，将被转发至所指定的 outbound 发出。\n\n> **警告**\n> 这种转发方式**不经过**底层传输方式。如果需要使用支持底层传输方式的转发，请使用 [SockOpt.dialerProxy](https://xtls.github.io/config/transport.html#sockoptobject)。\n\n> **警告**\n> 此选项与 SockOpt.dialerProxy 不兼容\n\n> **提示**\n> 兼容 v2fly/v2ray-core 的配置 [transportLayer](https://www.v2fly.org/config/outbounds.html#proxysettingsobject)"
+                        }
+                    }
+                },
+                "mux": {
+                    "type": "object",
+                    "markdownDescription": "Mux 相关的具体配置。\n\nMux 功能是在一条 TCP 连接上分发多个 TCP 连接的数据。实现细节详见 [Mux.Cool](https://xtls.github.io/development/protocols/muxcool)。Mux 是为了减少 TCP 的握手延迟而设计，而非提高连接的吞吐量。使用 Mux 看视频、下载或者测速通常都有反效果。Mux 只需要在客户端启用，服务器端自动适配。\n\n`MuxObject` 对应 `OutboundObject` 中的 `mux` 项。\n\n```json\n{\n  \"enabled\": true,\n  \"concurrency\": 8,\n  \"xudpConcurrency\": 16,\n  \"xudpProxyUDP443\": \"reject\"\n}\n```",
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean",
+                            "markdownDescription": "是否启用 Mux 转发请求，默认值 `false`。"
+                        },
+                        "concurrency": {
+                            "type": "number",
+                            "markdownDescription": "最大并发连接数。最小值 `1`，最大值 `1024`。省略或者填 `0` 时都等于 `8`。\n\n这个数值表示了一个 TCP 连接上最多承载的子连接数量。比如设置 `concurrency=8` 时，当客户端发出了 8 个 TCP 请求，Xray 只会发出一条实际的 TCP 连接，客户端的 8 个请求全部由这个 TCP 连接传输。\n\n> **提示**\n> 填负数时，如 `-1`，不使用 Mux 模块承载 TCP 流量。",
+                            "minimum": 0,
+                            "maximum": 1024
+                        },
+                        "xudpConcurrency": {
+                            "type": "number",
+                            "markdownDescription": "使用新 XUDP 聚合隧道（也就是另一条 Mux 连接）代理 UDP 流量，填写最大并发子 UoT 数量。最小值 `1`，最大值 `1024`。\n省略或者填 `0` 时，将与 TCP 流量走同一条路，也就是传统的行为。\n\n> **提示**\n填负数时，如 `-1`，不使用 Mux 模块承载 UDP 流量。将使用代理协议原本的 UDP 传输方式。例如 `Shadowsocks` 会使用原生 UDP，`VLESS` 会使用 UoT。",
+                            "minimum": 1,
+                            "maximum": 1024
+                        },
+                        "xudpProxyUDP443": {
+                            "type": "string",
+                            "markdownDescription": "控制 Mux 对于被代理的 UDP/443（QUIC）流量的处理方式：\n\n- 默认 `reject` 拒绝流量（一般浏览器会自动回落到 TCP HTTP2）\n- `allow` 允许走 Mux 连接。\n- 填 `skip` 时，不使用 Mux 模块承载 UDP 443 流量。将使用代理协议原本的 UDP 传输方式。例如 `Shadowsocks` 会使用原生 UDP，`VLESS` 会使用 UoT。",
+                            "enum": [
+                                "reject",
+                                "allow",
+                                "skip"
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "TransportObject": {
+            "type": "object",
+            "markdownDescription": "用于配置 Xray 其它服务器建立和使用网络连接的方式。\n\n# TransportObject\n\n`TransportObject` 对应配置文件的 `transport` 项。\n\n```json\n{\n  \"transport\": {\n    \"tcpSettings\": {},\n    \"kcpSettings\": {},\n    \"wsSettings\": {},\n    \"httpSettings\": {},\n    \"quicSettings\": {},\n    \"dsSettings\": {},\n    \"grpcSettings\": {}\n  }\n}\n```",
+            "properties": {
+                "tcpSettings": {
+                    "$ref": "#/$defs/_transport_/TcpObject",
+                    "markdownDescription": "针对 TCP 连接的配置。\n\n# TCP\n\nTCP 传输模式是目前推荐使用的传输模式之一.\n\n可以和各种协议有多种组合模式.\n\n## TcpObject\n\n`TcpObject` 对应传输配置的 `tcpSettings` 项。\n\n```json\n{\n  \"acceptProxyProtocol\": false,\n  \"header\": {\n    \"type\": \"none\"\n  }\n}\n```"
+                },
+                "kcpSettings": {
+                    "$ref": "#/$defs/_transport_/KcpObject",
+                    "markdownDescription": "针对 mKCP 连接的配置。\n\n# mKCP\n\nmKCP 使用 UDP 来模拟 TCP 连接。\n\nmKCP 牺牲带宽来降低延迟。传输同样的内容，mKCP 一般比 TCP 消耗更多的流量。\n\n> **提示**\n> 请确定主机上的防火墙配置正确\n\n## KcpObject\n\n`KcpObject` 对应传输配置的 `kcpSettings` 项。\n\n```json\n{\n  \"mtu\": 1350,\n  \"tti\": 20,\n  \"uplinkCapacity\": 5,\n  \"downlinkCapacity\": 20,\n  \"congestion\": false,\n  \"readBufferSize\": 1,\n  \"writeBufferSize\": 1,\n  \"header\": {\n    \"type\": \"none\"\n  },\n  \"seed\": \"Password\"\n}\n```"
+                },
+                "wsSettings": {
+                    "$ref": "#/$defs/_transport_/WebSocketObject",
+                    "markdownDescription": "针对 WebSocket 连接的配置。\n\n# WebSocket\n\n使用标准的 WebSocket 来传输数据。\n\nWebSocket 连接可以被其它 HTTP 服务器（如 Nginx）分流，也可以被 VLESS fallbacks path 分流。\n\n> **提示**\n> Websocket 会识别 HTTP 请求的 X-Forwarded-For 头来覆写流量的源地址，优先级高于 PROXY protocol。\n\n## WebSocketObject\n\n`WebSocketObject` 对应传输配置的 `wsSettings` 项。\n\n```json\n{\n  \"acceptProxyProtocol\": false,\n  \"path\": \"/\",\n  \"headers\": {\n    \"Host\": \"xray.com\"\n  }\n}\n```"
+                },
+                "httpSettings": {
+                    "$ref": "#/$defs/_transport_/HttpObject",
+                    "markdownDescription": "针对 HTTP/2 连接的配置。\n\n# HTTP/2\n\n基于 HTTP/2 的传输方式。\n\n它完整按照 HTTP/2 标准实现，可以通过其它的 HTTP 服务器（如 Nginx）进行中转。\n\n由 HTTP/2 的建议，客户端和服务器必须同时开启 TLS 才可以正常使用这个传输方式。\n\nHTTP/2 内置多路复用，不建议使用 HTTP/2 时启用 mux.cool。\n\n> **提示**\n> 当前版本的 HTTP/2 的传输方式并不强制要求**入站**（**服务端**）有 TLS 配置.\n> 这使得可以在特殊用途的分流部署环境中，由外部网关组件完成 TLS 层对话，Xray 作为后端应用，网关和 Xray 间使用称为 `h2c` 的明文 http/2 进行通讯。\n\n> **注意**\n> ⚠️ 如果你正在使用回落，请注意下列事项：\n>\n> - 请确认 (x)tlsSettings.alpn 中包含 h2，否则 HTTP/2 无法完成 TLS 握手。\n> - HTTP/2 无法通过 Path 进行分流，建议使用 SNI 分流。\n\n## HttpObject\n\n`HttpObject` 对应传输配置的 `httpSettings` 项。\n\n```json\n{\n  \"host\": [\"xray.com\"],\n  \"path\": \"/random/path\",\n  \"read_idle_timeout\": 10,\n  \"health_check_timeout\": 15,\n  \"method\": \"PUT\",\n  \"headers\": {\n    \"Header\": [\"value\"]\n  }\n}\n```"
+                },
+                "quicSettings": {
+                    "$ref": "#/$defs/_transport_/QUICObject",
+                    "markdownDescription": "针对 QUIC 连接的配置。# QUIC\n\nQUIC 全称 Quick UDP Internet Connection，是由 Google 提出的使用 UDP 进行多路并发传输的协议。其主要优势是:\n\n1. 减少了握手的延迟（1-RTT 或 0-RTT）\n2. 多路复用，并且没有 TCP 的阻塞问题\n3. 连接迁移，（主要是在客户端）当由 Wifi 转移到 4G 时，连接不会被断开。\n\nQUIC 目前处于实验期，使用了正在标准化过程中的 IETF 实现，不能保证与最终版本的兼容性。\n\n- 默认设定:\n  - 12 字节的 Connection ID\n  - 30 秒没有数据通过时自动断开连接 (可能会影响一些长连接的使用)\n\n## QuicObject\n\n`QuicObject` 对应传输配置的 `quicSettings` 项。\n\n> **警告**\n对接的两端的配置必须完全一致，否则连接失败。\nQUIC 强制要求开启 TLS，在传输配置中没有开启 TLS 时，Xray 会自行签发一个证书进行 TLS 通讯。\n:::\n\n```json\n{\n  \"security\": \"none\",\n  \"key\": \"\",\n  \"header\": {\n    \"type\": \"none\"\n  }\n}\n```"
+                },
+                "grpcSettings": {
+                    "$ref": "#/$defs/_transport_/GRPCObject",
+                    "markdownDescription": "针对 gRPC 连接的配置。# gRPC\n\n基于 gRPC 的传输方式。\n\n它基于 HTTP/2 协议，理论上可以通过其它支持 HTTP/2 的服务器（如 Nginx）进行中转。\ngRPC（HTTP/2）内置多路复用，不建议使用 gRPC 与 HTTP/2 时启用 mux.cool。\n\n> **⚠⚠⚠**\n> \n> - gRPC 不支持指定 Host。请在出站代理地址中填写 **正确的域名** ，或在 `(x)tlsSettings` 中填写 `ServerName`，否则无法连接。\n> - gRPC 不支持回落到其他服务。\n> - gRPC 服务存在被主动探测的风险。建议使用 Caddy 或 Nginx 等反向代理工具，通过 Path 前置分流。\n\n> **提示**\n> 如果您使用 Caddy 或 Nginx 等反向代理，请注意下列事项：\n>\n> - 请确定反向代理服务器开启了 HTTP/2\n> - 请使用 HTTP/2 或 h2c (Caddy)，grpc_pass (Nginx) 连接到 Xray。\n> - 普通模式的 Path 为 `/${serviceName}/Tun`, Multi 模式为 `/${serviceName}/TunMulti`\n> - 如果需要接收客户端 IP，可以通过由 Caddy / Nginx 发送 `X-Real-IP` header 来传递客户端 IP。\n\n> **提示**\n> 如果你正在使用回落，请注意下列事项：\n>\n> - 不建议回落到 gRPC，存在被主动探测的风险。\n> - 请确认`h2` 位于 (x)tlsSettings.alpn 中的第一顺位，否则 gRPC（HTTP/2）可能无法完成 TLS 握手。\n> - gRPC 无法通过进行 Path 分流。\n\n## GRPCObject\n\n`GRPCObject` 对应传输配置的 `grpcSettings` 项。\n\n```json\n{\n  \"serviceName\": \"name\",\n  \"multiMode\": false,\n  \"user_agent\": \"custom user agent\",\n  \"idle_timeout\": 60,\n  \"health_check_timeout\": 20,\n  \"permit_without_stream\": false,\n  \"initial_windows_size\": 0\n}\n```"
+                },
+                "dsSettings": {
+                    "$ref": "#/$defs/_transport_/DomainSocketObject",
+                    "markdownDescription": "针对 Domain Socket 连接的配置。。\n\n# Domain Socket\n\n> **警告**\n推荐写到 [inbounds](https://xtls.github.io/config/inbound.html) 的 `listen` 处，传输方式可选 TCP、WebSocket、HTTP/2.\n未来这里的 DomainSocket 可能会被弃用。\n:::\n\nDomain Socket 使用标准的 Unix domain socket 来传输数据。\n\n它的优势是使用了操作系统内建的传输通道，而不会占用网络缓存。\n理论上相比起本地环回网络（local loopback）来说，Domain socket 速度略快一些。\n\n目前仅可用于支持 Unix domain socket 的平台，如 Linux 和 macOS。在 Windows 10 Build 17036 前不可用。\n\n如果指定了 domain socket 作为传输方式，在入站出站代理中配置的端口和 IP 地址将会失效，所有的传输由 domain socket 取代。\n\n## DomainSocketObject\n\n`DomainSocketObject` 对应传输配置的 `dsSettings` 项。\n\n```json\n{\n  \"path\": \"/path/to/ds/file\",\n  \"abstract\": false,\n  \"padding\": false\n}\n```"
+                }
+            }
+        },
+        "StatsObject": {
+            "type": "object",
+            "markdownDescription": "用于配置流量数据的统计。\n\n# 统计信息\n\n用于配置 Xray 流量数据的统计。\n\n## StatsObject\n\n`StatsObject` 对应配置文件的 `stats` 项。\n\n```json\n{\n  \"stats\": {}\n}\n```\n\n目前统计信息不需要任何参数，只要 `StatsObject` 项存在，内部的统计即会开启。\n\n开启了统计以后, 只需在 [Policy](https://xtls.github.io/config/policy.html) 中开启对应的项，就可以统计对应的数据。",
+            "properties": {
+            }
+        },
+        "ReverseObject": {
+            "type": "object",
+            "markdownDescription": "反向代理。可以把服务器端的流量向客户端转发，即逆向流量转发。\n\n# 反向代理\n\n反向代理可以把服务器端的流量向客户端转发，即逆向流量转发。\n\n反向代理的大致工作原理如下:\n\n- 假设在主机 A 中有一个网页服务器，这台主机没有公网 IP，无法在公网上直接访问。另有一台主机 B，它可以由公网访问。现在我们需要把 B 作为入口，把流量从 B 转发到 A。\n- 在主机 A 中配置 Xray，称为`bridge`，在 B 中也配置 Xray，称为 `portal`。\n- `bridge` 会向 `portal` 主动建立连接，此连接的目标地址可以自行设定。`portal` 会收到两种连接，一是由 `bridge` 发来的连接，二是公网用户发来的连接。`portal` 会自动将两类连接合并。于是 `bridge` 就可以收到公网流量了。\n- `bridge` 在收到公网流量之后，会将其原封不动地发给主机 A 中的网页服务器。当然，这一步需要路由的协作。\n- `bridge` 会根据流量的大小进行动态的负载均衡。\n\n> **提示**\n> 反向代理默认已开启 [Mux](https://xtls.github.io/development/protocols/muxcool/)，请不要在其用到的 outbound 上再次开启 Mux。\n\n> **注意**\n> 反向代理功能尚处于测试阶段，可能会有一些问题。\n\n## ReverseObject\n\n`ReverseObject` 对应配置文件的 `reverse` 项。\n\n```json\n{\n  \"reverse\": {\n    \"bridges\": [\n      {\n        \"tag\": \"bridge\",\n        \"domain\": \"test.xray.com\"\n      }\n    ],\n    \"portals\": [\n      {\n        \"tag\": \"portal\",\n        \"domain\": \"test.xray.com\"\n      }\n    ]\n  }\n}\n```",
+            "properties": {
+                "bridges": {
+                    "type": "array",
+                    "markdownDescription": "数组，每一项表示一个 `bridge`。每个 `bridge` 的配置是一个 [BridgeObject](https://xtls.github.io/config/reverse.html#bridgeobject)。\n\n# BridgeObject\n\n```json\n{\n  \"tag\": \"bridge\",\n  \"domain\": \"test.xray.com\"\n}\n```",
+                    "items": {
+                        "$ref": "#/$defs/_reverse_/BridgeObject"
+                    }
+                },
+                "portals": {
+                    "type": "array",
+                    "markdownDescription": "数组，每一项表示一个 `portal`。每个 `portal` 的配置是一个 [PortalObject](https://xtls.github.io/config/reverse.html#bridgeobject)。\n\n# PortalObject\n\n```json\n{\n  \"tag\": \"portal\",\n  \"domain\": \"test.xray.com\"\n}\n```",
+                    "items": {
+                        "$ref": "#/$defs/_reverse_/PortalObject"
+                    }
+                }
+            }
+        },
+        "FakeDNSObject": {
+            "type": "object",
+            "markdownDescription": "FakeDNS 配置。可配合透明代理使用，以获取实际域名。\n\n# FakeDNS\n\nFakeDNS 通过伪造 DNS 以获取目标域名，能够降低 DNS 查询时的延迟、配合透明代理获取目标域名。\n\n> **注意**\n> FakeDNS 有可能会污染本地 DNS，导致 Xray 关闭后“无法访问网络”。\n\n## FakeDNSObject\n\n`FakeDNSObject` 对应配置文件的 `fakedns` 项。\n\n```json\n{\n  \"ipPool\": \"198.18.0.0/16\",\n  \"poolSize\": 65535\n}\n```\n\n`FakeDnsObject` 亦可配置为一个包含多个 FakeIP Pool 的数组。当收到 DNS 查询请求时，FakeDNS 会返回一组同时由多个 FakeIP Pool 得到的一组 FakeIP。\n\n```json\n[\n  {\n    \"ipPool\": \"198.18.0.0/15\",\n    \"poolSize\": 65535\n  },\n  {\n    \"ipPool\": \"fc00::/18\",\n    \"poolSize\": 65535\n  }\n]\n```",
+            "properties": {
+                "ipPool": {
+                    "type": "string",
+                    "markdownDescription": "FakeDNS 将使用此选项指定的 IP 块分配地址。"
+                },
+                "poolSize": {
+                    "type": "number",
+                    "markdownDescription": "指定 FakeDNS 储存的 域名-IP 映射的最大数目。当映射数超过此值后，会按照 LRU 规则淘汰映射。默认为 65535。\n\n> **注意**\n> `poolSize` 必须小于或等于 `ipPool` 对应的地址总数。"
+                }
+            }
+        }
+    }
+}

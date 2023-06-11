@@ -2171,6 +2171,10 @@
                 "streamSettings": {
                     "$ref": "#/$defs/_transport_/StreamSettingsObject",
                     "markdownDescription": "`StreamSettingsObject` 对应入站或出站中的 `streamSettings` 项。每一个入站或出站都可以分别配置不同的传输配置，都可以设置 `streamSettings` 来进行一些传输的配置。\n\n```json\n{\n  \"network\": \"tcp\",\n  \"security\": \"none\",\n  \"tlsSettings\": {},\n  \"tcpSettings\": {},\n  \"kcpSettings\": {},\n  \"wsSettings\": {},\n  \"httpSettings\": {},\n  \"quicSettings\": {},\n  \"dsSettings\": {},\n  \"grpcSettings\": {},\n  \"sockopt\": {\n    \"mark\": 0,\n    \"tcpFastOpen\": false,\n    \"tproxy\": \"off\",\n    \"domainStrategy\": \"AsIs\",\n    \"dialerProxy\": \"\",\n    \"acceptProxyProtocol\": false,\n    \"tcpKeepAliveInterval\": 0\n  }\n}\n```"
+                },
+                "tag": {
+                    "type": "string",
+                    "markdownDescription": "此入站连接的标识，用于在其它的配置中定位此连接。\n\n> **警告**\n> 当其不为空时，其值必须在所有 `tag` 中**唯一**。"
                 }
             }
         },

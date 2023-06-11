@@ -2183,7 +2183,19 @@
                 },
                 "protocol": {
                     "type": "string",
-                    "markdownDescription": "连接协议名称，可选的协议类型见 [出站协议](https://xtls.github.io/config/outbounds/)。"
+                    "markdownDescription": "连接协议名称，可选的协议类型见 [出站协议](https://xtls.github.io/config/outbounds/)。",
+                    "enum": [
+                        "blackhole",
+                        "dns",
+                        "freedom",
+                        "http",
+                        "shadowsocks",
+                        "socks",
+                        "trojan",
+                        "vless",
+                        "vmess",
+                        "wireguard"
+                    ]
                 },
                 "settings": {
                     "markdownDescription": "具体的配置内容，视协议不同而不同。详见每个协议中的 `OutboundConfigurationObject`。",

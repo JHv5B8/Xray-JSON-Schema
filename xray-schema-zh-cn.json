@@ -2232,6 +2232,10 @@
                         }
                     ]
                 },
+                "tag": {
+                    "type": "string",
+                    "markdownDescription": "此出站连接的标识，用于在其它的配置中定位此连接。\n\n> **警告**\n> 当其不为空时，其值必须在所有 `tag` 中 **唯一**。"
+                },
                 "streamSettings": {
                     "$ref": "#/$defs/_transport_/StreamSettingsObject",
                     "markdownDescription": "底层传输方式（transport）是当前 Xray 节点和其它节点对接的方式"

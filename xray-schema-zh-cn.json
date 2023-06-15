@@ -187,13 +187,16 @@
                             "markdownDescription": "一个数组，数组内每一项是一个标识。当某一项匹配入站协议的标识时，此规则生效。"
                         },
                         "protocol": {
-                            "type": "string",
+                            "type": "array",
                             "markdownDescription": "一个数组，数组内每一项表示一种协议。当某一个协议匹配当前连接的协议类型时，此规则生效。\n\n> **提示**\n> 必须开启入站代理中的 `sniffing` 选项, 才能嗅探出连接所使用的协议类型.",
-                            "enum": [
-                                "http",
-                                "tls",
-                                "bittorrent"
-                            ]
+                            "items": {
+                                "type": "string",
+                                "enum": [
+                                    "http",
+                                    "tls",
+                                    "bittorrent"
+                                ]
+                            }
                         },
                         "attrs": {
                             "type": "string",

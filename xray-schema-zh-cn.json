@@ -1,6 +1,6 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://github.com/JHv5B8/Test/raw/main/xray-schema.json",
+    "$id": "https://github.com/JHv5B8/Xray-JSON-Schema/raw/master/xray-schema-zh-cn.json",
     "title": "Xray-Core 配置文件",
     "type": "object",
     "properties": {
@@ -482,10 +482,6 @@
                     },
                     "default": {
                         "$ref": "#/$defs/_inbound_/_vmess_/DefaultObject"
-                    },
-                    "disableInsecureEncryption": {
-                        "type": "boolean",
-                        "markdownDescription": "是否禁止客户端使用不安全的加密方式，如果设置为 true 当客户端指定下列加密方式时，服务器会主动断开连接。\n\n- `\"none\"`\n- `\"aes-128-cfb\"`\n\n默认值为`false`。"
                     }
                 }
             },
@@ -586,10 +582,6 @@
                         "level": {
                             "$ref": "#/$defs/_common_/policyLevel"
                         },
-                        "alterId": {
-                            "type": "number",
-                            "markdownDescription": "为了进一步防止被探测，一个用户可以在主 ID 的基础上，再额外生成多个 ID。这里只需要指定额外的 ID 的数量，推荐值为 0 代表启用 VMessAEAD。\n最大值 65535。这个值不能超过服务器端所指定的值。\n\n不指定的话，默认值是 0。\n\n> **提示**\n> 客户端 AlterID 设置为 0 代表启用 VMessAEAD ；服务端为自动适配，可同时兼容启用和未开启 VMessAEAD 的客户端。\n> 客户端可通过设置环境变量 `Xray_VMESS_AEAD_DISABLED=true` 强行禁用 VMessAEAD"
-                        },
                         "email": {
                             "type": "string",
                             "markdownDescription": "用户邮箱地址，用于区分不同用户的流量。"
@@ -610,10 +602,6 @@
                     "properties": {
                         "level": {
                             "$ref": "#/$defs/_common_/policyLevel"
-                        },
-                        "alterId": {
-                            "type": "number",
-                            "markdownDescription": "动态端口的默认`alterId`，默认值为`0`。"
                         }
                     }
                 }
@@ -682,7 +670,7 @@
             },
             "dns": {
                 "type": "object",
-                "markdownDescription": "# DNS\n\nDNS 是一个出站协议，主要用于拦截和转发 DNS 查询。\n\n此出站协议只能接收 DNS 流量（包含基于 UDP 和 TCP 协议的查询），其它类型的流量会导致错误。\n\n在处理 DNS 查询时，此出站协议会将 IP 查询（即 A 和 AAAA）转发给内置的 [DNS 服务器](https://xtls.github.io/config/dns.html)。其它类型的查询流量将被转发至它们原本的目标地址。\n\n## OutboundConfigurationObject\n\n```json\n{\n  \"network\": \"tcp\",\n  \"address\": \"1.1.1.1\",\n  \"port\": 53\n}\n```",
+                "markdownDescription": "# DNS\n\nDNS 是一个出站协议，主要用于拦截和转发 DNS 查询。\n\n此出站协议只能接收 DNS 流量（包含基于 UDP 和 TCP 协议的查询），其它类型的流量会导致错误。\n\n在处理 DNS 查询时，此出站协议会将 IP 查询（即 A 和 AAAA）转发给内置的 [DNS 服务器](../dns.md)。其它类型的查询流量将被转发至它们原本的目标地址。\n\n## OutboundConfigurationObject\n\n```json\n{\n  \"network\": \"tcp\",\n  \"address\": \"1.1.1.1\",\n  \"port\": 53,\n  \"nonIPQuery\": \"drop\"\n}\n```",
                 "properties": {
                     "network": {
                         "type": "string",
@@ -698,12 +686,20 @@
                     },
                     "port": {
                         "$ref": "#/$defs/_common_/port"
+                    },
+                    "nonIPQuery": {
+                        "type": "string",
+                        "markdownDescription": "控制非 IP 查询（非 A 和 AAAA），`\"drop\"` 丢弃或者 `\"skip\"` 不由内置 DNS 服务器处理，将转发给目标。默认为 `\"drop\"`。",
+                        "enum": [
+                            "drop",
+                            "skip"
+                        ]
                     }
                 }
             },
             "freedom": {
                 "type": "object",
-                "markdownDescription": "# Freedom\n\nFreedom 是一个出站协议，可以用来向任意网络发送（正常的） TCP 或 UDP 数据。\n\n## OutboundConfigurationObject\n\n```json\n{\n  \"domainStrategy\": \"AsIs\",\n  \"redirect\": \"127.0.0.1:3366\",\n  \"userLevel\": 0\n}\n```",
+                "markdownDescription": "# Freedom\n\nFreedom 是一个出站协议，可以用来向任意网络发送（正常的） TCP 或 UDP 数据。\n\n## OutboundConfigurationObject\n\n```json\n{\n  \"domainStrategy\": \"AsIs\",\n  \"redirect\": \"127.0.0.1:3366\",\n  \"userLevel\": 0,\n  \"fragment\": {\n    \"packets\": \"tlshello\",\n    \"length\": \"100-200\",\n    \"interval\": \"10-20\" // ms\n  }\n}\n```",
                 "properties": {
                     "domainStrategy": {
                         "type": "string",
@@ -721,6 +717,26 @@
                     },
                     "userLevel": {
                         "$ref": "#/$defs/_common_/policyLevel"
+                    },
+                    "fragment": {
+                        "$ref": "#/$defs/_outbound_/_freedom_/fragment",
+                        "markdownDescription": "一些键值对配置项，用于控制发出的 TCP 分片，在某些情况下可以欺骗审查系统，比如绕过 SNI 黑名单。\n\n`\"packets\"`：支持两种分片方式 \"1-3\" 是 TCP 的流切片，应用于客户端第 1 至第 3 次写数据。\"tlshello\" 是 TLS 握手包切片。\n\n`\"length\"`：分片包长 (byte)\n\n`\"interval\"`：分片间隔（ms）"
+                    }
+                }
+            },
+            "_freedom_": {
+                "fragment": {
+                    "type": "object",
+                    "properties": {
+                        "packets": {
+                            "type": "string"
+                        },
+                        "length": {
+                            "type": "string"
+                        },
+                        "interval": {
+                            "type": "string"
+                        }
                     }
                 }
             },
@@ -795,7 +811,7 @@
             "_shadowsocks_": {
                 "ServerObject": {
                     "type": "object",
-                    "markdownDescription": "# Shadowsocks\n\n[Shadowsocks](https://zh.wikipedia.org/wiki/Shadowsocks) 协议，兼容大部分其它版本的实现。\n\n目前兼容性如下：\n\n- 支持 TCP 和 UDP 数据包转发，其中 UDP 可选择性关闭；\n- 推荐的加密方式：\n  - 2022-blake3-aes-128-gcm\n  - 2022-blake3-aes-256-gcm\n  - 2022-blake3-chacha20-poly1305\n- 其他加密方式\n  - aes-256-gcm\n  - aes-128-gcm\n  - chacha20-poly1305 或称 chacha20-ietf-poly1305\n  - none 或 plain\n\nShadowsocks 2022 新协议格式提升了性能并带有完整的重放保护，解决了旧协议的以下安全问题：\n\n- [Shadowsocks AEAD 加密方式设计存在严重漏洞，无法保证通信内容的可靠性](https://github.com/shadowsocks/shadowsocks-org/issues/183)\n- 原有 TCP 重放过滤器误报率随时间增加\n- 没有 UDP 重放保护\n- 可用于主动探测的 TCP 行为\n\n> **警告**\n> \"none\" 不加密方式下流量将明文传输。为确保安全性, 不要在公共网络上使用。\n\n## OutboundConfigurationObject\n\n```json\n{\n  \"servers\": [\n    {\n      \"email\": \"love@xray.com\",\n      \"address\": \"127.0.0.1\",\n      \"port\": 1234,\n      \"method\": \"加密方式\",\n      \"password\": \"密码\",\n      \"level\": 0\n    }\n  ]\n}\n```",
+                    "markdownDescription": "# Shadowsocks\n\n[Shadowsocks](https://zh.wikipedia.org/wiki/Shadowsocks) 协议，兼容大部分其它版本的实现。\n\n目前兼容性如下：\n\n- 支持 TCP 和 UDP 数据包转发，其中 UDP 可选择性关闭；\n- 推荐的加密方式：\n  - 2022-blake3-aes-128-gcm\n  - 2022-blake3-aes-256-gcm\n  - 2022-blake3-chacha20-poly1305\n- 其他加密方式\n  - aes-256-gcm\n  - aes-128-gcm\n  - chacha20-poly1305 或称 chacha20-ietf-poly1305\n  - xchacha20-poly1305 或称 xchacha20-ietf-poly1305\n  - none 或 plain\n\nShadowsocks 2022 新协议格式提升了性能并带有完整的重放保护，解决了旧协议的以下安全问题：\n\n- [Shadowsocks AEAD 加密方式设计存在严重漏洞，无法保证通信内容的可靠性](https://github.com/shadowsocks/shadowsocks-org/issues/183)\n- 原有 TCP 重放过滤器误报率随时间增加\n- 没有 UDP 重放保护\n- 可用于主动探测的 TCP 行为\n\n> **警告**\n> \"none\" 不加密方式下流量将明文传输。为确保安全性, 不要在公共网络上使用。\n\n## OutboundConfigurationObject\n\n```json\n{\n  \"email\": \"love@xray.com\",\n  \"address\": \"127.0.0.1\",\n  \"port\": 1234,\n  \"method\": \"加密方式\",\n  \"password\": \"密码\",\n  \"uot\": true,\n  \"UoTVersion\": 2,\n  \"level\": 0\n}\n```",
                     "properties": {
                         "email": {
                             "type": "string",
@@ -944,7 +960,7 @@
             },
             "vless": {
                 "type": "object",
-                "markdownDescription": "# VLESS\n\n> **警告**\n> 目前 VLESS 没有自带加密，请用于可靠信道，如 TLS。\n\nVLESS 是一个无状态的轻量传输协议，它分为入站和出站两部分，可以作为 Xray 客户端和服务器之间的桥梁。\n\n与 [VMess](https://xtls.github.io/config/outbounds/vmess.html) 不同，VLESS 不依赖于系统时间，认证方式同样为 UUID，但不需要 alterId。\n\n## OutboundConfigurationObject\n\n```json\n{\n  \"vnext\": [\n    {\n      \"address\": \"example.com\",\n      \"port\": 443,\n      \"users\": [\n        {\n          \"id\": \"5783a3e7-e373-51cd-8642-c83782b807c5\",\n          \"encryption\": \"none\",\n          \"flow\": \"xtls-rprx-vision\",\n          \"level\": 0\n        }\n      ]\n    }\n  ]\n}\n```",
+                "markdownDescription": "# VLESS\n\n> **警告**\n> 目前 VLESS 没有自带加密，请用于可靠信道，如 TLS。\n\nVLESS 是一个无状态的轻量传输协议，它分为入站和出站两部分，可以作为 Xray 客户端和服务器之间的桥梁。\n\n与 [VMess](https://xtls.github.io/config/outbounds/vmess.html) 不同，VLESS 不依赖于系统时间，认证方式同样为 UUID\n\n## OutboundConfigurationObject\n\n```json\n{\n  \"vnext\": [\n    {\n      \"address\": \"example.com\",\n      \"port\": 443,\n      \"users\": [\n        {\n          \"id\": \"5783a3e7-e373-51cd-8642-c83782b807c5\",\n          \"encryption\": \"none\",\n          \"flow\": \"xtls-rprx-vision\",\n          \"level\": 0\n        }\n      ]\n    }\n  ]\n}\n```",
                 "properties": {
                     "vnext": {
                         "type": "array",
@@ -1007,7 +1023,7 @@
             },
             "vmess": {
                 "type": "object",
-                "markdownDescription": "# VMess\n\n[VMess](https://xtls.github.io/development/protocols/vmess.html) 是一个加密传输协议，通常作为 Xray 客户端和服务器之间的桥梁。\n\n> **警告**\n> VMess 依赖于系统时间，请确保使用 Xray 的系统 UTC 时间误差在 90 秒之内，时区无关。在 Linux 系统中可以安装`ntp`服务来自动同步系统时间。\n\n## OutboundConfigurationObject\n\n```json\n{\n  \"vnext\": [\n    {\n      \"address\": \"127.0.0.1\",\n      \"port\": 37192,\n      \"users\": [\n        {\n          \"id\": \"5783a3e7-e373-51cd-8642-c83782b807c5\",\n          \"alterId\": 0,\n          \"security\": \"auto\",\n          \"level\": 0\n        }\n      ]\n    }\n  ]\n}\n```",
+                "markdownDescription": "# VMess\n\n[VMess](https://xtls.github.io/development/protocols/vmess.html) 是一个加密传输协议，通常作为 Xray 客户端和服务器之间的桥梁。\n\n> **警告**\n> VMess 依赖于系统时间，请确保使用 Xray 的系统 UTC 时间误差在 120 秒之内，时区无关。在 Linux 系统中可以安装`ntp`服务来自动同步系统时间。\n\n## OutboundConfigurationObject\n\n```json\n{\n  \"vnext\": [\n    {\n      \"address\": \"127.0.0.1\",\n      \"port\": 37192,\n      \"users\": [\n        {\n          \"id\": \"5783a3e7-e373-51cd-8642-c83782b807c5\",\n          \"security\": \"auto\",\n          \"level\": 0\n        }\n      ]\n    }\n  ]\n}\n```",
                 "properties": {
                     "vnext": {
                         "type": "array",
@@ -1032,7 +1048,7 @@
                         },
                         "users": {
                             "type": "array",
-                            "markdownDescription": "一个数组，代表一组服务端认可的用户.\n\n其中每一项是一个用户[UserObject](https://xtls.github.io/config/outbounds/vmess.html#userobject)。\n\n# UserObject\n\n```json\n{\n  \"id\": \"5783a3e7-e373-51cd-8642-c83782b807c5\",\n  \"alterId\": 0,\n  \"security\": \"auto\",\n  \"level\": 0\n}\n```",
+                            "markdownDescription": "一个数组，代表一组服务端认可的用户.\n\n其中每一项是一个用户[UserObject](https://xtls.github.io/config/outbounds/vmess.html#userobject)。\n\n# UserObject\n\n```json\n{\n  \"id\": \"5783a3e7-e373-51cd-8642-c83782b807c5\",\n  \"security\": \"auto\",\n  \"level\": 0\n}\n```",
                             "items": {
                                 "$ref": "#/$defs/_outbound_/_vmess_/UserObject"
                             }
@@ -1074,7 +1090,7 @@
             },
             "wireguard": {
                 "type": "object",
-                "markdownDescription": "# Wireguard\n\n标准 Wireguard 协议实现。\n\n> **警告**\n> **Wireguard 协议并非专门为翻墙而设计，若在最外层过墙，存在特征可能导致服务器被封锁**\n\n## OutboundConfigurationObject\n\n```json\n{\n  \"secretKey\": \"PRIVATE_KEY\",\n  \"address\": [\n    // optional, default [\"10.0.0.1\", \"fd59:7153:2388:b5fd:0000:0000:0000:0001\"]\n    \"IPv4_CIDR\",\n    \"IPv6_CIDR\",\n    \"and more...\"\n  ],\n  \"peers\": [\n    {\n      \"endpoint\": \"ENDPOINT_ADDR\",\n      \"publicKey\": \"PUBLIC_KEY\"\n    }\n  ],\n  \"mtu\": 1420, // optional, default 1420\n  \"workers\": 2 // optional, default runtime.NumCPU()\n}\n```\n\n> **提示**\n> 目前 Wireguard 协议 outbound 中不支持设置 `streamSettings`",
+                "markdownDescription": "# Wireguard\n\n标准 Wireguard 协议实现。\n\n> **警告**\n> **Wireguard 协议并非专门为翻墙而设计，若在最外层过墙，存在特征可能导致服务器被封锁**\n\n## OutboundConfigurationObject\n\n```json{\n  \"secretKey\": \"PRIVATE_KEY\",\n  \"address\": [\n    // optional, default [\"10.0.0.1\", \"fd59:7153:2388:b5fd:0000:0000:0000:0001\"]\n    \"IPv4_CIDR\",\n    \"IPv6_CIDR\",\n    \"and more...\"\n  ],\n  \"peers\": [\n    {\n      \"endpoint\": \"ENDPOINT_ADDR\",\n      \"publicKey\": \"PUBLIC_KEY\"\n    }\n  ],\n  \"mtu\": 1420, // optional, default 1420\n  \"reserved\": [1, 2, 3],\n  \"workers\": 2 // optional, default runtime.NumCPU()\n}```\n\n> **提示**\n> 目前 Wireguard 协议 outbound 中不支持设置 `streamSettings`",
                 "properties": {
                     "secretKey": {
                         "type": "string",
@@ -1089,17 +1105,24 @@
                     },
                     "mtu": {
                         "type": "number",
-                        "markdownDescription": "Wireguard 底层 tun 的分片大小"
+                        "markdownDescription": "Wireguard 底层 tun 的分片大小。"
                     },
                     "workers": {
                         "type": "number",
-                        "markdownDescription": "Wireguard 使用线程数"
+                        "markdownDescription": "Wireguard 使用线程数。"
                     },
                     "peers": {
                         "type": "array",
                         "markdownDescription": "Wireguard 服务器列表，其中每一项是一个服务器配置。\n\n# Peers\n\n```json\n{\n  \"endpoint\": \"ENDPOINT_ADDR\",\n  \"publicKey\": \"PUBLIC_KEY\",\n  \"preSharedKey\": \"PRE_SHARED_KEY\", // optional, default \"0000000000000000000000000000000000000000000000000000000000000000\"\n  \"keepAlive\": 0, // optional, default 0\n  \"allowedIPs\": [\"0.0.0.0/0\"] // optional, default [\"0.0.0.0/0\", \"::/0\"]\n}\n```",
                         "items": {
                             "$ref": "#/$defs/_outbound_/_wireguard_/Peers"
+                        }
+                    },
+                    "reserved": {
+                        "type": "array",
+                        "markdownDescription": "Wireguard 保留字节。",
+                        "items": {
+                            "type": "number"
                         }
                     }
                 },
@@ -1245,7 +1268,7 @@
                             "1.1",
                             "1.2",
                             "1.3"
-                        ],
+                        ]
                     },
                     "maxVersion": {
                         "type": "string",
@@ -1255,7 +1278,7 @@
                             "1.1",
                             "1.2",
                             "1.3"
-                        ],
+                        ]
                     },
                     "cipherSuites": {
                         "type": "string",

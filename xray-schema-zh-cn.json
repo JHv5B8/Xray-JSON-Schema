@@ -2003,10 +2003,10 @@
                     "markdownDescription": "静态 IP 列表，其值为一系列的 \"域名\": \"地址\" 或 \"域名\": [\"地址 1\",\"地址 2\"]。其中地址可以是 IP 或者域名。在解析域名时，如果域名匹配这个列表中的某一项:\n\n- 当该项的地址为 IP 时，则解析结果为该项的 IP\n- 当该项的地址为域名时，会使用此域名进行 IP 解析，而不使用原始域名。\n- 当地址中同时设置了多个 IP 和域名，则只会返回第一个域名，其余 IP 和域名均被忽略。\n\n域名的格式有以下几种形式：\n\n- 纯字符串：当此字符串完整匹配目标域名时，该规则生效。例如 \"xray.com\" 匹配 \"xray.com\"，但不匹配 \"www.xray.com\"。\n- 正则表达式：由 `\"regexp:\"` 开始，余下部分是一个正则表达式。当此正则表达式匹配目标域名时，该规则生效。例如 \"regexp:\\\\\\\\.goo.\\*\\\\\\\\.com\\$\" 匹配 \"www.google.com\"、\"fonts.googleapis.com\"，但不匹配 \"google.com\"。\n- 子域名 (推荐)：由 `\"domain:\"` 开始，余下部分是一个域名。当此域名是目标域名或其子域名时，该规则生效。例如 \"domain:xray.com\" 匹配 \"www.xray.com\" 与 \"xray.com\"，但不匹配 \"wxray.com\"。\n- 子串：由 `\"keyword:\"` 开始，余下部分是一个字符串。当此字符串匹配目标域名中任意部分，该规则生效。比如 \"keyword:sina.com\" 可以匹配 \"sina.com\"、\"sina.com.cn\" 和 \"www.sina.com\"，但不匹配 \"sina.cn\"。\n- 预定义域名列表：由 `\"geosite:\"` 开头，余下部分是一个名称，如 `geosite:google` 或者 `geosite:cn`。名称及域名列表参考 [预定义域名列表](https://xtls.github.io/config/routing.html#%E9%A2%84%E5%AE%9A%E4%B9%89%E5%9F%9F%E5%90%8D%E5%88%97%E8%A1%A8)。",
                     "oneOf": [
                         {
-                            "$ref": "#/defs/_common_/map<string, string>"
+                            "$ref": "#/$defs/_common_/map<string, string>"
                         },
                         {
-                            "$ref": "#/defs/_common_/map<string, list<string>>"
+                            "$ref": "#/$defs/_common_/map<string, list<string>>"
                         }
                     ]
                 },
@@ -2025,7 +2025,7 @@
                                         "$ref": "#/$defs/_dns_/address"
                                     },
                                     "port": {
-                                        "$ref": "#/defs/_common_/port",
+                                        "$ref": "#/$defs/_common_/port",
                                         "markdownDescription": "DNS 服务器端口，如 `53`。此项缺省时默认为 `53`。当使用 DOH、DOHL、DOQL 模式时该项无效，非标端口应在 URL 中指定。"
                                     },
                                     "domains": {

@@ -111,23 +111,14 @@
                     "type": "array",
                     "items": {
                         "type": "string",
-                        "enum": [
-                            "regexp:",
-                            "domain:",
-                            "full:",
-                            "geosite:",
-                            "ext:"
-                        ]
+                        "pattern": "^(?:regexp|domain|full|geosite|ext):.+$"
                     }
                 },
                 "ip": {
                     "type": "array",
                     "items": {
                         "type": "string",
-                        "enum": [
-                            "geoip:",
-                            "ext:"
-                        ]
+                        "pattern": "^(?:geoip|ext):.+$"
                     }
                 },
                 "RuleObject": {

@@ -2157,30 +2157,7 @@
                     ]
                 },
                 "settings": {
-                    "markdownDescription": "具体的配置内容，视协议不同而不同。详见每个协议中的 `InboundConfigurationObject`。",
-                    "oneOf": [
-                        {
-                            "$ref": "#/$defs/_inbound_/dokodemo"
-                        },
-                        {
-                            "$ref": "#/$defs/_inbound_/http"
-                        },
-                        {
-                            "$ref": "#/$defs/_inbound_/shadowsocks"
-                        },
-                        {
-                            "$ref": "#/$defs/_inbound_/socks"
-                        },
-                        {
-                            "$ref": "#/$defs/_inbound_/trojan"
-                        },
-                        {
-                            "$ref": "#/$defs/_inbound_/vless"
-                        },
-                        {
-                            "$ref": "#/$defs/_inbound_/vmess"
-                        }
-                    ]
+                    "markdownDescription": "具体的配置内容，视协议不同而不同。详见每个协议中的 `InboundConfigurationObject`。"
                 },
                 "streamSettings": {
                     "$ref": "#/$defs/_transport_/StreamSettingsObject",
@@ -2190,7 +2167,128 @@
                     "type": "string",
                     "markdownDescription": "此入站连接的标识，用于在其它的配置中定位此连接。\n\n> **警告**\n> 当其不为空时，其值必须在所有 `tag` 中**唯一**。"
                 }
-            }
+            },
+            "allOf": [
+                {
+                    "if": {
+                        "properties": {
+                            "protocol": {
+                                "const": "dokodemo-door"
+                            }
+                        },
+                        "required": ["protocol"]
+                    },
+                    "then": {
+                        "properties": {
+                            "settings": {
+                                "$ref": "#/$defs/_inbound_/dokodemo"
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "protocol": {
+                                "const": "http"
+                            }
+                        },
+                        "required": ["protocol"]
+                    },
+                    "then": {
+                        "properties": {
+                            "settings": {
+                                "$ref": "#/$defs/_inbound_/http"
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "protocol": {
+                                "const": "shadowsocks"
+                            }
+                        },
+                        "required": ["protocol"]
+                    },
+                    "then": {
+                        "properties": {
+                            "settings": {
+                                "$ref": "#/$defs/_inbound_/shadowsocks"
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "protocol": {
+                                "const": "socks"
+                            }
+                        },
+                        "required": ["protocol"]
+                    },
+                    "then": {
+                        "properties": {
+                            "settings": {
+                                "$ref": "#/$defs/_inbound_/socks"
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "protocol": {
+                                "const": "trojan"
+                            }
+                        },
+                        "required": ["protocol"]
+                    },
+                    "then": {
+                        "properties": {
+                            "settings": {
+                                "$ref": "#/$defs/_inbound_/trojan"
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "protocol": {
+                                "const": "vless"
+                            }
+                        },
+                        "required": ["protocol"]
+                    },
+                    "then": {
+                        "properties": {
+                            "settings": {
+                                "$ref": "#/$defs/_inbound_/vless"
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "protocol": {
+                                "const": "vmess"
+                            }
+                        },
+                        "required": ["protocol"]
+                    },
+                    "then": {
+                        "properties": {
+                            "settings": {
+                                "$ref": "#/$defs/_inbound_/vmess"
+                            }
+                        }
+                    }
+                }
+            ]
         },
         "OutboundObject": {
             "type": "object",
@@ -2216,39 +2314,7 @@
                     ]
                 },
                 "settings": {
-                    "markdownDescription": "具体的配置内容，视协议不同而不同。详见每个协议中的 `OutboundConfigurationObject`。",
-                    "oneOf": [
-                        {
-                            "$ref": "#/$defs/_outbound_/blackhole"
-                        },
-                        {
-                            "$ref": "#/$defs/_outbound_/dns"
-                        },
-                        {
-                            "$ref": "#/$defs/_outbound_/freedom"
-                        },
-                        {
-                            "$ref": "#/$defs/_outbound_/http"
-                        },
-                        {
-                            "$ref": "#/$defs/_outbound_/shadowsocks"
-                        },
-                        {
-                            "$ref": "#/$defs/_outbound_/socks"
-                        },
-                        {
-                            "$ref": "#/$defs/_outbound_/trojan"
-                        },
-                        {
-                            "$ref": "#/$defs/_outbound_/vless"
-                        },
-                        {
-                            "$ref": "#/$defs/_outbound_/vmess"
-                        },
-                        {
-                            "$ref": "#/$defs/_outbound_/wireguard"
-                        }
-                    ]
+                    "markdownDescription": "具体的配置内容，视协议不同而不同。详见每个协议中的 `OutboundConfigurationObject`。"
                 },
                 "tag": {
                     "type": "string",
@@ -2299,7 +2365,179 @@
                         }
                     }
                 }
-            }
+            },
+            "allOf": [
+                {
+                    "if": {
+                        "properties": {
+                            "protocol": {
+                                "const": "blackhole"
+                            }
+                        },
+                        "required": ["protocol"]
+                    },
+                    "then": {
+                        "properties": {
+                            "settings": {
+                                "$ref": "#/$defs/_outbound_/blackhole"
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "protocol": {
+                                "const": "dns"
+                            }
+                        },
+                        "required": ["protocol"]
+                    },
+                    "then": {
+                        "properties": {
+                            "settings": {
+                                "$ref": "#/$defs/_outbound_/dns"
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "protocol": {
+                                "const": "freedom"
+                            }
+                        },
+                        "required": ["protocol"]
+                    },
+                    "then": {
+                        "properties": {
+                            "settings": {
+                                "$ref": "#/$defs/_outbound_/freedom"
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "protocol": {
+                                "const": "http"
+                            }
+                        },
+                        "required": ["protocol"]
+                    },
+                    "then": {
+                        "properties": {
+                            "settings": {
+                                "$ref": "#/$defs/_outbound_/http"
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "protocol": {
+                                "const": "shadowsocks"
+                            }
+                        },
+                        "required": ["protocol"]
+                    },
+                    "then": {
+                        "properties": {
+                            "settings": {
+                                "$ref": "#/$defs/_outbound_/shadowsocks"
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "protocol": {
+                                "const": "socks"
+                            }
+                        },
+                        "required": ["protocol"]
+                    },
+                    "then": {
+                        "properties": {
+                            "settings": {
+                                "$ref": "#/$defs/_outbound_/socks"
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "protocol": {
+                                "const": "trojan"
+                            }
+                        },
+                        "required": ["protocol"]
+                    },
+                    "then": {
+                        "properties": {
+                            "settings": {
+                                "$ref": "#/$defs/_outbound_/trojan"
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "protocol": {
+                                "const": "vless"
+                            }
+                        },
+                        "required": ["protocol"]
+                    },
+                    "then": {
+                        "properties": {
+                            "settings": {
+                                "$ref": "#/$defs/_outbound_/vless"
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "protocol": {
+                                "const": "vmess"
+                            }
+                        },
+                        "required": ["protocol"]
+                    },
+                    "then": {
+                        "properties": {
+                            "settings": {
+                                "$ref": "#/$defs/_outbound_/vmess"
+                            }
+                        }
+                    }
+                },
+                {
+                    "if": {
+                        "properties": {
+                            "protocol": {
+                                "const": "wireguard"
+                            }
+                        },
+                        "required": ["protocol"]
+                    },
+                    "then": {
+                        "properties": {
+                            "settings": {
+                                "$ref": "#/$defs/_outbound_/wireguard"
+                            }
+                        }
+                    }
+                }
+            ]
         },
         "TransportObject": {
             "type": "object",
